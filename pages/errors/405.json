@@ -1,0 +1,6 @@
+{
+    "status":"error",
+    "status_code":"405",
+    "message":"method not allowed",
+    "result":["The method used is not allowed for the requested resource."]
+}

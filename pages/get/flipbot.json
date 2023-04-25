@@ -1,0 +1,174 @@
+{
+    "general": {
+        "url": "https://api.hypixel.net/skyblock/auctions",
+        "key": "fe3420d1-1803-449d-b78d-1d19df7816b5"
+    },
+
+    "items":[
+        "Crimson Helmet",
+        "Crimson Chestplate",
+        "Crimson Leggings",
+        "Crimson Boots",
+        "Terror Helmet",
+        "Terror Chestplate",
+        "Terror Leggings",
+        "Terror Boots",
+        "Aurora Helmet",
+        "Aurora Chestplate",
+        "Aurora Leggings",
+        "Aurora Boots",
+        "Molten Necklace",
+        "Molten Bracelet",
+        "Molten Cloak",
+        "Molten Belt",
+        "Glowstone Gauntlet",
+        "Implosion Belt",
+        "Gauntlet of Contagion",
+        "Magma Necklace"
+    ],
+
+    "observer": {
+        "Crimson Helmet":[
+                ["Veterant", "Vitality"],
+                ["Veterant", "Magic Find"],
+                ["Dominance", "Vitality"]
+        ],
+        "Crimson Chestplate":[
+                ["Veterant", "Vitality"],
+                ["Veterant", "Magic Find"],
+                ["Dominance", "Vitality"]
+        ],
+        "Crimson Leggings":[
+                ["Veterant", "Vitality"],
+                ["Veterant", "Magic Find"],
+                ["Dominance", "Vitality"]
+        ],
+        "Crimson Boots":[
+                ["Veterant", "Vitality"],
+                ["Veterant", "Magic Find"],
+                ["Dominance", "Vitality"]
+        ],
+        "Terror Helmet":[
+                ["Veterant", "Vitality"],
+                ["Veterant", "Magic Find"],
+                ["Dominance", "Vitality"]
+        ],
+        "Terror Chestplate":[
+                ["Veterant", "Vitality"],
+                ["Veterant", "Magic Find"],
+                ["Dominance", "Vitality"]
+        ],
+        "Terror Leggings":[
+                ["Veterant", "Vitality"],
+                ["Veterant", "Magic Find"],
+                ["Dominance", "Vitality"]
+        ],
+        "Terror Boots":[
+                ["Veterant", "Vitality"],
+                ["Veterant", "Magic Find"],
+                ["Dominance", "Vitality"]
+        ],
+        "Aurora Helmet":[
+                ["Mana Pool", "Mana Regeneration"],
+                ["Mana Regeneration", "Magic Find"],
+                ["Mana Regeneration", "Veterant"]
+        ],
+        "Aurora Chestplate":[
+                ["Mana Pool", "Mana Regeneration"],
+                ["Mana Regeneration", "Magic Find"],
+                ["Mana Regeneration", "Veterant"],
+                ["Lifeline", "Life Regeneration"]
+        ],
+        "Aurora Leggings":[
+                ["Mana Pool", "Mana Regeneration"],
+                ["Mana Regeneration", "Magic Find"],
+                ["Mana Regeneration", "Veterant"]
+        ],
+        "Aurora Boots":[
+                ["Mana Pool", "Mana Regeneration"],
+                ["Mana Regeneration", "Magic Find"],
+                ["Mana Regeneration", "Veterant"]
+        ],
+        "Molten Necklace":[
+                ["Dominance", "Speed"],
+                ["Veterant", "Vitality"]
+        ],
+        "Molten Bracelet":[
+                ["Dominance", "Speed"],
+                ["Veterant", "Vitality"]
+        ],
+        "Molten Cloak":[
+                ["Dominance", "Speed"],
+                ["Veterant", "Vitality"]
+        ],
+        "Molten Belt":[
+                ["Dominance", "Speed"],
+                ["Veterant", "Vitality"]
+        ],
+        "Glowstone Gauntlet":[
+                ["Mana Pool", "Mana Regeneration"]
+        ],
+        "Implosion Belt":[
+                ["Dominance", "Speed"]
+        ],
+        "Gauntlet of Contagion": [
+                ["Dominance", "Speed"]
+        ],
+        "Magma Necklace": [
+                ["Dominance", "Speed"]
+        ]
+    },
+
+    "ignore":{
+        "prefix":
+        [
+                "Waxed",
+                "Glistening",
+                "Strengthened",
+                "Fortified",
+                "Necrotic",
+                "Ancient",
+                "Withered",
+                "Suspicious",
+                "Heroic",
+                "Fabled",
+                "Sharp",
+                "Renowned"
+
+        ],
+        "suffix":
+        [       
+                "➎",
+                "➍",
+                "➌",
+                "➋",
+                "➊",
+                "✪✪✪✪✪",
+                "✪✪✪✪",
+                "✪✪✪",
+                "✪✪",
+                "✪"
+        ]
+    },
+
+    "shards": [
+        "Mana Pool",
+        "Mana Regeneration",
+        "Vitality",
+        "Veterant",
+        "Magic Find",
+        "Speed",
+        "Mana Steal"
+    ],
+
+    "flips":[
+        " Scylla",
+        "Hyperion",
+        "Valkyrie",
+        "Astraea",
+        "Sorrow Chestplate",
+        "Sorrow Helmet",
+        "Sorrow Leggings",
+        "Sorrow Boots"
+    ]
+}

@@ -1,0 +1,1 @@
+{\n    \"status\":\"error\",\n    \"status_code\":\"500\",\n    \"message\":\"internal server error\",\n    \"result\":[\"There was an internal server error, if the issue persists please contact support.\"]\n}

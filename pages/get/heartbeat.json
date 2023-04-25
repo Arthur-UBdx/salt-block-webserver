@@ -1,0 +1,6 @@
+{
+    "status":"success",
+    "status_code":"200",
+    "message":"OK",
+    "result":["pong"]
+}

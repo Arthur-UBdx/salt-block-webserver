@@ -1,0 +1,6 @@
+{
+    "status":"error",
+    "status_code":"403",
+    "message":"Forbidden",
+    "result":["You don't have permission to access this ressource."]
+}

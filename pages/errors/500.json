@@ -1,0 +1,6 @@
+{
+    "status":"error",
+    "status_code":"500",
+    "message":"internal server error",
+    "result":["There was an internal server error, if the issue persists please contact support."]
+}
