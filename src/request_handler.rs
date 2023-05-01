@@ -1,9 +1,13 @@
 use std::net::TcpStream;
-use std::{fs, io::prelude::*, io::BufReader};
+use std::{fs, str, io::prelude::*, io::BufReader};
 use std::collections::HashMap;
 use sha2::{Sha256, Digest};
 use hex;
+
+#[allow(unused_imports)]
 use log::{debug, info, warn, error};
+
+use crate::script_runner::*;
 
 // mod script_runner;
 // use crate::script_runner::*;
@@ -23,41 +27,56 @@ macro_rules! send {
 
 pub fn handle_connection(mut stream: TcpStream, database_filepath: &str) {
     let database = WebserverDatabase::new(database_filepath);
-
-    let incoming_request = match IncomingRequest::parse_request(&stream){
-        RequestParse::Ok(v) => v,
-        RequestParse::Empty => {return},
-        RequestParse::BadRequest => {
-            let http_response = match database.get_error(HTTPCode::Err400) {
-                ServerStatus::Ok(Some(v)) => v,
-                _ => {send!(stream, ERR500);}
-            };
-            let response = format!("HTTP/1.1 400 BAD REQUEST\r\nContent-Length: {}\r\n\r\n{}", http_response.content_length, http_response.contents);
-            send!(stream, response);
-        }
-    };
-    debug!("{:#?}", incoming_request);
-    
-    let http_code = match database.match_request(incoming_request) {
-        ServerStatus::Ok(v) => v,
-        ServerStatus::InternalError => {
-            send!(stream, ERR500)
+    let ret = match IncomingRequest::parse_request(&stream) {
+        ParsedRequest::Ok(v) => v,
+        _ => {error!("bad request");
+            return;
         },
     };
+    println!("{:#?}", ret);
+    return;
 
-    let response = match http_code {
-        HTTPCode::Ok200(v) => HTTPResponse::from_matched_request(v).prepare_response(),
-        _ => {
-            let http_response = match database.get_error(http_code) {
-                ServerStatus::Ok(Some(v)) => v,
-                _ => {send!(stream, ERR500);}
-            };
-            http_response.prepare_response()
-        }
-    };
+    // let incoming_request = match IncomingRequest::parse_request(&stream){
+    //     ParsedRequest::Ok(v) => v,
+    //     ParsedRequest::Empty => {return},
+    //     ParsedRequest::BadRequest => {
+    //         warn!("An invalid request has been formulated by {}", stream.peer_addr());
+    //         let http_response = match database.get_error(HTTPCode::Err400) {
+    //             ServerStatus::Ok(Some(v)) => v,
+    //             _ => {send!(stream, ERR500);}
+    //         };
+    //         let response = format!("HTTP/1.1 400 BAD REQUEST\r\nContent-Length: {}\r\n\r\n{}", http_response.content_length, http_response.contents);
+    //         send!(stream, response);
+    //     }
+    // };
+    // debug!("{:#?}", incoming_request);
 
-    send!(stream, response);
+    // let http_code = match database.match_request(incoming_request) {
+    //     ServerStatus::Ok(v) => v,
+    //     ServerStatus::InternalError => {
+    //         send!(stream, ERR500)
+    //     },
+    // };
+
+    // let response = match http_code {
+    //     HTTPCode::Ok200(v) => {match HTTPResponse::from_matched_request(v) {
+    //         ServerStatus::Ok(v) => v.prepare_response(),
+    //         _ => {send!(stream, ERR500);}
+    //     }},
+    //     _ => {
+    //         let http_response = match database.get_error(http_code) {
+    //             ServerStatus::Ok(Some(v)) => v,
+    //             _ => {send!(stream, ERR500);}
+    //         };
+    //         http_response.prepare_response()
+    //     }
+    // };
+    
+    // debug!("{}", response);
+    // send!(stream, response);
 }
+
+//--
 
 enum HTTPCode {
     Ok200 (MatchedRequest),
@@ -77,12 +96,6 @@ enum UserAuth {
     Ok (u8),
     ErrAuth,
     ErrNotFound,
-}
-
-enum RequestParse {
-    Ok(IncomingRequest),
-    Empty,
-    BadRequest,
 }
 
 struct MatchedRequest {
@@ -105,26 +118,37 @@ impl HTTPResponse {
         http_response
     }
 
-    pub fn from_matched_request(matched_request: MatchedRequest) -> HTTPResponse {
+    pub fn from_matched_request(matched_request: MatchedRequest) -> ServerStatus<HTTPResponse> {
         let mut http_response = HTTPResponse::new(200, String::from("OK"));
-        http_response.load_contents(matched_request.callback);
-        http_response
+        match http_response.load_contents(matched_request.callback) {
+            ServerStatus::Ok(()) => (),
+            ServerStatus::InternalError => return ServerStatus::InternalError,
+        };
+        ServerStatus::Ok(http_response)
     }
 
-    pub fn load_contents(&mut self, filename: String) -> ServerStatus<()> {
-        self.contents = match fs::read_to_string(filename) {
-            Ok(v) => v,
-            _ => {
-                error!("Error when loading content from file");
-                return ServerStatus::InternalError;
+    fn load_contents(&mut self, filename: String) -> ServerStatus<()> {
+        let result = match (&filename).split('.').last().unwrap_or("") {
+            "py" => run_python(&filename),
+            "js" => run_js(&filename),
+            _ => match fs::read_to_string(&filename) {
+                Ok(v) => Ok(v),
+                _ => Err(String::from("Error when loading text file")),
             },
         };
+        let contents = match result {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Error when accessing content:\n{}", e);
+                return ServerStatus::InternalError;
+            }
+        };
+        self.set_contents(contents);
         self.update_content_length();
         ServerStatus::Ok(())
     }
 
-    #[allow(dead_code)]
-    pub fn set_contents(&mut self, contents: String) {
+    fn set_contents(&mut self, contents: String) {
         self.contents = contents;
         self.update_content_length();
     }
@@ -322,6 +346,12 @@ impl WebserverDatabase {
     }
 }
 
+enum ParsedRequest {
+    Ok(IncomingRequest),
+    Empty,
+    BadRequest,
+}
+
 #[derive(Debug)]
 struct IncomingRequest {
     method: String,
@@ -329,83 +359,69 @@ struct IncomingRequest {
     query: HashMap<String, String>,
     _version: String,
     headers: HashMap<String, String>,
-    _body: String,
+    body: String,
 }
 
 impl IncomingRequest {
-    pub fn parse_request(stream: &TcpStream) -> RequestParse {
-        let request_line: String;
-        let buf_reader = BufReader::new(stream);
-        let mut lines = buf_reader.lines();
-        let request_line_option = lines.next();
-        if request_line_option.is_none() {
-            return RequestParse::Empty;
-        };
-
-        // un gros bordel juste pour séparer la méthode, l'URI, les paramètres et la version dans "GET /path?params=val HTTP/1.1" par exemple donne
-        // method = "GET"
-        // path = "/path"
-        // query = "{key1:val1, key2: val2}" (hashmap)
-        // version = "HTTP/1.1"
-        request_line = request_line_option.unwrap().unwrap();
-        let mut parts = request_line.splitn(3, " ");
-        let method = parts.next().unwrap();
-        let path_and_query = parts.next().unwrap();
-        let version = parts.next().unwrap();
+    pub fn parse_request(mut stream: &TcpStream) -> ParsedRequest {
+        let mut buf_reader = BufReader::new(&mut stream);
+        let mut request_line = String::new();
+        buf_reader.read_line(&mut request_line).unwrap();
         
-        let mut path_and_query_iter = path_and_query.splitn(2, "?");
-        let path = path_and_query_iter.next().unwrap();
-        
-        let query = path_and_query_iter.next().unwrap_or("");
-        let query_pairs = query.split("&");
-        let mut map: HashMap<&str, &str> = HashMap::new();
-        for query_pair in query_pairs {
-            let parts: Vec<&str> = query_pair.split("=").collect();
-            if parts.len() == 2 {
-                map.insert(parts[0], parts[1]);
+        let (method, uri, version) = match request_line.split_once(' ') {
+            Some((method, rest)) => {
+                let (uri, version) = rest.split_once(' ').unwrap();
+                (method, uri, version)
             }
-        }
-        let query_map: HashMap<String, String> = map
-            .iter()
-            .map(|(&k, &v)| (k.to_owned(), v.to_owned()))
-            .collect();
-
-        // -- récupération des headers
+            None => return ParsedRequest::BadRequest,
+        };
+        
+        let mut query_map: HashMap<String, String> = HashMap::new();
+        info!("URI = {}", uri);
+        let (path, query_map): (String, HashMap<String, String>) = match uri.split_once('?') {
+            Some((path, query)) => {
+                let parts = query.split('&');
+                parts.for_each(|s| {
+                    let (key, value) = s.split_once('=').unwrap_or(("",""));
+                    query_map.insert(key.to_string(), value.to_string());
+                });
+                (path.to_string(), query_map)
+            }
+            None => (uri.to_string(), HashMap::new()),
+        };
+        
         
         let mut headers_map: HashMap<String, String> = HashMap::new();
-        let mut header: String;
         loop {
-            header = lines.next().unwrap().unwrap();
-            match header.as_str() {
-                "" => {break},
-                _ => {
-                    let mut header_splitted = header.split(":");
-                    let key = String::from(header_splitted.next().unwrap().trim_end());
-                    let value = String::from(header_splitted.next().unwrap().trim_end());
-                    headers_map.insert(key, value);
-                }
-            };
+            let mut line = String::new();
+            buf_reader.read_line(&mut line).unwrap();
+            match line.as_str() {
+                "\r\n" => break,
+                _ => {}
+            }
+            let mut header_splitted = line.split(":");
+            let key = String::from(header_splitted.next().unwrap().trim_end());
+            let value = String::from(header_splitted.next().unwrap().trim_end());
+            headers_map.insert(key, value);
         }
-        
+
+        let mut body = String::new();
         let content_length = match headers_map.get("Content-Length") {
             None => 0usize,
             Some(v) => {
                 match v.trim().parse::<usize>() {
-                    Ok(v) => v,
-                    _ => {return RequestParse::BadRequest},
+                    Ok(v) => {
+                        let mut body_buffer = vec![0; v];
+                        buf_reader.read_exact(&mut body_buffer).unwrap();
+                        body = String::from_utf8_lossy(&body_buffer).to_string();
+                        v
+                    },
+                    _ => return ParsedRequest::BadRequest,
                 }
             }
         };
-        
-        debug!("Incoming request content length: {}", content_length);
-        let body = String::new();
-        
-        RequestParse::Ok(IncomingRequest {
-            method: method.to_string(),
-            path: path.to_string(),
-            query: query_map,
-            _version: version.to_string(),
-            headers: headers_map,
-            _body: body})
+
+        let incoming = IncomingRequest {method: method.to_string(), path: path, query: query_map, _version: version.to_string(), headers: headers_map, body: body};
+        ParsedRequest::Ok(incoming)
     }
 }

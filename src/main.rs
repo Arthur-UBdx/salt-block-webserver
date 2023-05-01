@@ -5,6 +5,7 @@ use simplelog::{CombinedLogger, WriteLogger, TermLogger, TerminalMode, Config, C
 use std::fs::File;
 use std::env;
 
+mod script_runner;
 mod request_handler;
 mod thread_pool;
 

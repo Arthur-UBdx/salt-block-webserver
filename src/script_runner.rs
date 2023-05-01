@@ -1,28 +1,44 @@
 use std::process::Command;
-use io;
 
-pub fn run_js(program_file: &str) -> Result<String, io::Error> {
+pub fn run_js(program_file: &str) -> Result<String, String> {
     let output = match Command::new("node")
-        .arg(program_file)
-        .output() {
-            Ok(v) => v,
-            _ => {
-                return Err(&format!("Failed to run script {} ", program_file));
-            }
-        };
+    .arg(program_file) // replace with your Python script file name
+    .output()
+    {
+        Ok(v) => v,
+        _ => {
+            return Err(String::from("failed to run script"));
+        }
+    };
 
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    if output.status.success() {
+        let result = String::from_utf8_lossy(&output.stdout);
+        return Ok(result.to_string());
+    } else {
+        let result = String::from_utf8_lossy(&output.stderr);
+        return Err(result.to_string());
+    }
 }
 
-pub fn run_python(program_file: &str) -> Result<String, io::Error> {
-    let output = match Command::new("python3")
-        .arg(program_file)
-        .output() {
-            Ok(v) => v,
-            _ => {
-                return Err(&format!("Failed to run script {} ", program_file));
-            }
-        };
 
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+pub fn run_python(program_file: &str) -> Result<String, String> {
+    let output = match Command::new("python")
+    .arg(program_file) // replace with your Python script file name
+    .output()
+    {
+        Ok(v) => v,
+        _ => {
+            return Err(String::from("failed to run script"));
+        }
+    };
+
+    if output.status.success() {
+        let result = String::from_utf8_lossy(&output.stdout);
+        return Ok(result.to_string());
+    } else {
+        let result = String::from_utf8_lossy(&output.stderr);
+        return Err(result.to_string());
+    }
 }
+
+
