@@ -1,0 +1,74 @@
+use sha2::Sha256;
+use hex;
+
+/// This function goes into the database in the `users` table and search for the `user`, if not found returns `[ServerStatus::Ok(UserAuth::ErrNotFound)]`,
+/// if the user was found the functions uses the SHA256 algorithm to hash the provided password and compares it to the value stored in the database
+/// if the values are different the function returns `[ServerStatus::Ok(UserAuth::ErrAuth)]`, if the password is correct it returns `Ok(n)` where `n` is the authentication level
+fn auth_user(&self, username: String, password: String) -> ServerStatus<UserAuth> {
+    let connection = match sqlite::open(&self.filepath) {
+        Ok(v) => v,
+        _ => {
+            error!("Error when connecting to SQL database");
+            return ServerStatus::InternalError;
+        },
+    };
+
+    let sql_request = "SELECT * FROM users WHERE username = ?";
+    let mut statement = match connection.prepare(sql_request) {
+        Ok(v) => v,
+        _ => {
+            error!("Error when executing SQL request:\n {}", sql_request);
+            return ServerStatus::InternalError;
+        },
+    };
+    match statement.bind((1, username.as_str())) {
+        Ok(v) => v,
+        _ => {
+            error!("Error when executing SQL request");
+            return ServerStatus::InternalError}
+    };
+
+    if let sqlite::State::Done = statement.next().unwrap() {
+        return ServerStatus::Ok(UserAuth::ErrNotFound);
+    }
+
+    let correct_hash = statement.read::<String, usize>(1).unwrap();
+    let auth_level = match statement.read::<String, usize>(3).unwrap().parse::<u8>() {
+        Ok(v) => v,
+        _ => 0,
+    };
+
+    let mut auth_hash = Sha256::new();
+    auth_hash.update(format!("{}{}", username, password).as_bytes());
+    let result = hex::encode(auth_hash.finalize());
+
+    debug!("Hash comparaison:\ncorrect {}\nactual  {}\n", correct_hash, result);
+
+    if result == correct_hash {
+    ServerStatus::Ok(UserAuth::Ok(username, auth_level))
+    } else {   
+        ServerStatus::Ok(UserAuth::ErrAuth)
+    }
+
+}
+
+if auth_level > 0 {
+    let (username, password): (String, String) = match (incoming.query.get("username"), incoming.query.get("password")) {
+        (Some(u), Some(p)) => (String::from(u), String::from(p)),
+        _ => return ServerStatus::Ok(HTTPCode::Err401) 
+    };
+
+    let (username, user_auth_level) = match self.auth_user(username, password) {
+        ServerStatus::Ok(v) => match v {
+            UserAuth::Ok(n,v) => (n,v),
+            _ => {return ServerStatus::Ok(HTTPCode::Err401)},
+        },
+        _ => {error!("Error when trying to get user auth level");
+            return ServerStatus::InternalError},
+    };
+
+    if user_auth_level < auth_level {
+        return ServerStatus::Ok(HTTPCode::Err403);
+    }
+}
+ServerStatus::Ok(HTTPCode::Ok200(MatchedRequest {path: path, callback: callback, auth_level: auth_level, params: parameters}))

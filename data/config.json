@@ -1,0 +1,5 @@
+{
+    "database":"database.db",
+    "ip":"127.0.0.1:7878",
+    "log_file":"log/server.log"
+}

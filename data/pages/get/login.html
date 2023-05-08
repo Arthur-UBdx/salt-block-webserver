@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Log in</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: white;
+        }
+        h1 {
+            color: black;
+            font-family: Arial, Helvetica, sans-serif;
+            text-align: center;
+        }
+        
+        * {box-sizing: border-box;}
+
+        .container {
+            padding: 10px 25px 10px;
+            margin: 0 25% 0;
+            background-color: #F0F0F0;
+            border-radius: 15px;
+        }
+
+        input[type=text], input[type=password] {
+            width: 100%;
+            padding: 15px;
+            margin: 5px 0 22px 0;
+            display: inline-block;
+            border: none;
+            background: #DDDDDD;
+            border-radius: 3px;
+        }
+
+        .register-button {
+            background-color: #AAAAAA;
+            font-size: 16pt;
+            color: black;
+            padding: 16px 20px;
+            margin: 8px 0;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            opacity: 0.9;
+            border-radius: 5px;
+        }
+
+        .spacer {
+            padding: 60px;
+        }
+    </style>
+</head>
+<body>
+    <div class="spacer"></div>
+    <div class="container">
+    <h1>Log in</h1>
+    <form action="/login" method="post">
+        <label for="username"><b>Username</b></label><br>
+        <input type="text" placeholder="Enter username" name="username" maxlength="25" required><br>
+
+        <label for="password"><b>Password</b></label><br>
+        <input type="password" placeholder="Enter password" name="password" maxlength="100" required><br>
+
+        <button type="submit" class="register-button"><b>Log in</b></button>
+    </form>
+    </div>
+</body>
+</html>

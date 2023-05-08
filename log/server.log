@@ -1,10 +1,6 @@
-10:44:45 [INFO] URI = /
-10:44:45 [INFO] URI = /
-10:44:45 [INFO] URI = /
-10:44:46 [INFO] URI = /
-10:44:46 [INFO] URI = /
-10:44:46 [INFO] URI = /
-10:44:51 [INFO] URI = /
-10:44:51 [INFO] URI = /
-10:44:51 [INFO] URI = /
-10:45:14 [INFO] URI = /?mescouilles=oui&brigite=non
+19:33:57 [ERROR] Error when accessing content:
+Traceback (most recent call last):
+  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/pages/post/login.py", line 1, in <module>
+    from lib.scripting_utils import *
+ModuleNotFoundError: No module named 'lib'
+

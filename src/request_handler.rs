@@ -1,19 +1,39 @@
-use std::net::TcpStream;
+use std::net::{SocketAddr, Ipv4Addr, IpAddr, TcpStream};
 use std::{fs, str, io::prelude::*, io::BufReader};
 use std::collections::HashMap;
-use sha2::{Sha256, Digest};
-use hex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[allow(unused_imports)]
 use log::{debug, info, warn, error};
 
 use crate::script_runner::*;
+use crate::database_utils::Database;
 
-// mod script_runner;
-// use crate::script_runner::*;
-
+/// The response which is sent to the client if there was an error in the [handle_connection] function or any function called by it.
+/// 
+/// Defaults to:
+/// ```text
+/// HTTP/1.1 500 INTERNAL SERVER ERROR
+/// Content-Length: 188
+///
+/// {
+///     "status":"error",
+///     "status_code":"500",
+///     "message":"internal server error",
+///     "result":["There was an internal server error, if the issue persists please contact support."]
+/// }
+/// ```
 static ERR500: &str = "HTTP/1.1 500 INTERNAL SERVER ERROR\r\nContent-Length: 188\r\n\r\n{\n    \"status\":\"error\",\n    \"status_code\":\"500\",\n    \"message\":\"internal server error\",\n    \"result\":[\"There was an internal server error, if the issue persists please contact support.\"]\n}";
 
+/// Sends back to the client `stream` the message `msg`
+///
+/// # Example
+/// ```
+/// let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+/// let message = "HTTP/1.1 200 OK";
+/// send!(listener.incoming(), message);
+/// ```
+/// this will send and OK message to the client
 macro_rules! send {
     ($stream: expr, $msg:expr) => {
         {
@@ -25,372 +45,117 @@ macro_rules! send {
     };
 }
 
+/// Handles the incoming HTTP request
+/// Parses the HTTP request, gets the page in the database, runs the script associated or returns the html or json files
+/// 
+/// # Example:
+/// ```
+/// let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+/// handle_connection(listener.incoming(), "database.db");
+/// ```
+/// this will send back to the client the result of the HTTP request made to `127.0.0.1:7878` by said client
 pub fn handle_connection(mut stream: TcpStream, database_filepath: &str) {
-    let database = WebserverDatabase::new(database_filepath);
-    let ret = match IncomingRequest::parse_request(&stream) {
+    let database = Database::new(database_filepath);
+    let incoming_request = match IncomingRequest::parse_request(&stream){
         ParsedRequest::Ok(v) => v,
-        _ => {error!("bad request");
-            return;
+        ParsedRequest::Empty => {return},
+        ParsedRequest::BadRequest => {
+            warn!("An invalid request has been formulated by {}", stream.peer_addr().unwrap_or(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 7878)));
+            let http_response = match database.get_error(HTTPCode::Err400) {
+                ServerStatus::Ok(Some(v)) => v,
+                _ => {send!(stream, ERR500);}
+            };
+            let response = format!("HTTP/1.1 400 BAD REQUEST\r\nContent-Length: {}\r\n\r\n{}", http_response.content_length, http_response.contents);
+            send!(stream, response);
+        }
+    };
+
+    debug!("{}\n", incoming_request.as_json());
+
+    let http_code = match database.match_request(&incoming_request) {
+        ServerStatus::Ok(v) => v,
+        ServerStatus::InternalError => {
+            send!(stream, ERR500)
         },
     };
-    println!("{:#?}", ret);
-    return;
 
-    // let incoming_request = match IncomingRequest::parse_request(&stream){
-    //     ParsedRequest::Ok(v) => v,
-    //     ParsedRequest::Empty => {return},
-    //     ParsedRequest::BadRequest => {
-    //         warn!("An invalid request has been formulated by {}", stream.peer_addr());
-    //         let http_response = match database.get_error(HTTPCode::Err400) {
-    //             ServerStatus::Ok(Some(v)) => v,
-    //             _ => {send!(stream, ERR500);}
-    //         };
-    //         let response = format!("HTTP/1.1 400 BAD REQUEST\r\nContent-Length: {}\r\n\r\n{}", http_response.content_length, http_response.contents);
-    //         send!(stream, response);
-    //     }
-    // };
-    // debug!("{:#?}", incoming_request);
-
-    // let http_code = match database.match_request(incoming_request) {
-    //     ServerStatus::Ok(v) => v,
-    //     ServerStatus::InternalError => {
-    //         send!(stream, ERR500)
-    //     },
-    // };
-
-    // let response = match http_code {
-    //     HTTPCode::Ok200(v) => {match HTTPResponse::from_matched_request(v) {
-    //         ServerStatus::Ok(v) => v.prepare_response(),
-    //         _ => {send!(stream, ERR500);}
-    //     }},
-    //     _ => {
-    //         let http_response = match database.get_error(http_code) {
-    //             ServerStatus::Ok(Some(v)) => v,
-    //             _ => {send!(stream, ERR500);}
-    //         };
-    //         http_response.prepare_response()
-    //     }
-    // };
+    let response = match http_code {
+        HTTPCode::Ok200(v) => {match HTTPResponse::from_matched_request(v, incoming_request) {
+            ServerStatus::Ok(v) => v.prepare_response(),
+            _ => {send!(stream, ERR500);}
+        }},
+        _ => {
+            let http_response = match database.get_error(http_code) {
+                ServerStatus::Ok(Some(v)) => v,
+                _ => {send!(stream, ERR500);}
+            };
+            http_response.prepare_response()
+        }
+    };
     
-    // debug!("{}", response);
-    // send!(stream, response);
+    debug!("{}", response);
+    send!(stream, response);
 }
 
-//--
+//--//
 
-enum HTTPCode {
-    Ok200 (MatchedRequest),
-    Err400,
-    Err401,
-    Err403,
-    Err404,
-    Err405,
-}
-
-enum ServerStatus<T> {
-    Ok(T),
-    InternalError,
-}
-
-enum UserAuth {
-    Ok (u8),
-    ErrAuth,
-    ErrNotFound,
-}
-
-struct MatchedRequest {
-    path: String, 
-    callback: String,
-    auth_level: u8,
-    params: Vec<String>,
-}
-
-struct HTTPResponse {
-    response_code: u32,
-    response_message: String,
-    contents: String,
-    content_length: usize,
-}
-
-impl HTTPResponse {
-    pub fn new(response_code: u32, response_message: String) -> HTTPResponse {
-        let http_response = HTTPResponse {response_code, response_message, contents: String::new(), content_length: 0usize};
-        http_response
-    }
-
-    pub fn from_matched_request(matched_request: MatchedRequest) -> ServerStatus<HTTPResponse> {
-        let mut http_response = HTTPResponse::new(200, String::from("OK"));
-        match http_response.load_contents(matched_request.callback) {
-            ServerStatus::Ok(()) => (),
-            ServerStatus::InternalError => return ServerStatus::InternalError,
-        };
-        ServerStatus::Ok(http_response)
-    }
-
-    fn load_contents(&mut self, filename: String) -> ServerStatus<()> {
-        let result = match (&filename).split('.').last().unwrap_or("") {
-            "py" => run_python(&filename),
-            "js" => run_js(&filename),
-            _ => match fs::read_to_string(&filename) {
-                Ok(v) => Ok(v),
-                _ => Err(String::from("Error when loading text file")),
-            },
-        };
-        let contents = match result {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Error when accessing content:\n{}", e);
-                return ServerStatus::InternalError;
-            }
-        };
-        self.set_contents(contents);
-        self.update_content_length();
-        ServerStatus::Ok(())
-    }
-
-    fn set_contents(&mut self, contents: String) {
-        self.contents = contents;
-        self.update_content_length();
-    }
-
-    #[allow(dead_code)]
-    pub fn send_response(&self, mut stream: TcpStream) -> ServerStatus<()> {
-        let response = format!("HTTP/1.1 {} {}\r\nContent-Length: {}\r\n\r\n{}", 
-            self.response_code,
-            self.response_message,
-            self.content_length,
-            self.contents);
-
-        match stream.write_all(response.as_bytes()) {
-            Ok(()) => (),
-            _ => {error!("Error when writing buffer into stream");
-                return ServerStatus::InternalError},
-        };
-
-        match stream.flush() {
-            Ok(()) => (),
-            _ => {error!("Error when sending stream");
-                return ServerStatus::InternalError},
-        };
-
-        ServerStatus::Ok(())
-    }
-
-    fn update_content_length(&mut self) {
-        self.content_length = self.contents.len();
-    }
-
-    fn prepare_response(&self) -> String {
-        format!("HTTP/1.1 {} {}\r\nContent-Length: {}\r\n\r\n{}", 
-            self.response_code,
-            self.response_message,
-            self.content_length,
-            self.contents)
-    }
-}
-
-struct WebserverDatabase {
-    filepath: String,
-}
-
-impl WebserverDatabase {
-    fn new(filepath: &str) -> WebserverDatabase {
-        WebserverDatabase {filepath: String::from(filepath)}
-    }
-
-    fn match_request(&self, incoming: IncomingRequest) -> ServerStatus<HTTPCode> {
-        let connection = match sqlite::open(&self.filepath) {
-            Ok(v) => v,
-            _ => {
-                error!("Error when connecting to SQL database");
-                return ServerStatus::InternalError}
-        };
-
-        let mut statement = match connection.prepare(format!("SELECT * FROM requests_{} WHERE path = ?", incoming.method)) {
-            Ok(v) => v,
-            _ => {
-                error!("Error when executing SQL request");
-                return ServerStatus::InternalError}
-        };
-        
-        match statement.bind((1, incoming.path.as_str())) {
-            Ok(v) => v,
-            _ => {
-                error!("Error when executing SQL request");
-                return ServerStatus::InternalError}
-        };
-        if let sqlite::State::Done = statement.next().unwrap() {
-            return ServerStatus::Ok(HTTPCode::Err404);
-        }
-
-        let callback: String = statement.read::<String, usize>(1).unwrap();
-        let auth_level: u8 = match statement.read::<String, usize>(2).unwrap().parse::<u8>() {
-            Ok(v) => v,
-            _ => 255,
-        };
-        let parameters: Vec<String> = statement.read::<String, usize>(3).unwrap()
-        .split(";")
-        .map(|s| s.to_string())
-        .collect();
-        
-        if auth_level > 0 {
-            let (username, password): (String, String) = match (incoming.query.get("username"), incoming.query.get("password")) {
-                (Some(u), Some(p)) => (String::from(u), String::from(p)),
-                _ => return ServerStatus::Ok(HTTPCode::Err401) 
-            };
-
-            let user_auth_level = match self.auth_user(username, password) {
-                ServerStatus::Ok(v) => match v {
-                    UserAuth::Ok(v) => v,
-                    _ => {return ServerStatus::Ok(HTTPCode::Err401)},
-                },
-                _ => {error!("Error when trying to get user auth level");
-                    return ServerStatus::InternalError},
-            };
-
-            if user_auth_level < auth_level {
-                return ServerStatus::Ok(HTTPCode::Err403);
-            }
-        }
-        ServerStatus::Ok(HTTPCode::Ok200(MatchedRequest {path: incoming.path, callback: callback, auth_level: auth_level, params: parameters}))
-    }
-
-    fn auth_user(&self, username: String, password: String) -> ServerStatus<UserAuth> {
-        let connection = match sqlite::open(&self.filepath) {
-            Ok(v) => v,
-            _ => {
-                error!("Error when connecting to SQL database");
-                return ServerStatus::InternalError;
-            },
-        };
-
-        let sql_request = "SELECT * FROM users WHERE username = ?";
-        let mut statement = match connection.prepare(sql_request) {
-            Ok(v) => v,
-            _ => {
-                error!("Error when executing SQL request:\n {}", sql_request);
-                return ServerStatus::InternalError;
-            },
-        };
-        match statement.bind((1, username.as_str())) {
-            Ok(v) => v,
-            _ => {
-                error!("Error when executing SQL request");
-                return ServerStatus::InternalError}
-        };
-
-        if let sqlite::State::Done = statement.next().unwrap() {
-            return ServerStatus::Ok(UserAuth::ErrNotFound);
-        }
-
-        let correct_hash = statement.read::<String, usize>(1).unwrap();
-        let auth_level = match statement.read::<String, usize>(3).unwrap().parse::<u8>() {
-            Ok(v) => v,
-            _ => 0,
-        };
-
-        let mut auth_hash = Sha256::new();
-        auth_hash.update(format!("{}{}", username, password).as_bytes());
-        let result = hex::encode(auth_hash.finalize());
-
-        debug!("Hash comparaison:\ncorrect {}\nactual  {}\n", correct_hash, result);
-
-        if result == correct_hash {
-        ServerStatus::Ok(UserAuth::Ok(auth_level))
-        } else {   
-            ServerStatus::Ok(UserAuth::ErrAuth)
-        }
-
-    }
-
-    pub fn get_error(&self, httpcode: HTTPCode) -> ServerStatus<Option<HTTPResponse>> {
-        let error_name = match httpcode {
-            HTTPCode::Ok200 (_) => {return ServerStatus::Ok(None)},
-            HTTPCode::Err400 => "err400",
-            HTTPCode::Err401 => "err401",
-            HTTPCode::Err403 => "err403",
-            HTTPCode::Err404 => "err404",
-            HTTPCode::Err405 => "err405",
-        };
-
-        let connection = match sqlite::open(&self.filepath) {
-            Ok(v) => v,
-            _ => {
-                error!("Error when connecting to SQL database");
-                return ServerStatus::InternalError;
-            },
-        };
-
-        let sql_request = &format!("SELECT * FROM errors WHERE name = '{}'", error_name);
-        let mut statement = match connection.prepare(sql_request) {
-            Ok(v) => v,
-            _ => {
-                error!("Error when executing SQL request: \n{}", sql_request);
-                return ServerStatus::InternalError;
-            },
-        };
-
-        if let sqlite::State::Done = statement.next().unwrap() {
-            error!("Error code '{}' not found in database", error_name);
-            return ServerStatus::InternalError;
-        }
-
-        let response_message = statement.read::<String, usize>(1).unwrap();
-        let page_filepath = statement.read::<String, usize>(2).unwrap();
-
-        let error_code: u32 = error_name[3..].parse::<u32>().unwrap(); 
-        let mut http_response = HTTPResponse::new(error_code, String::from(response_message));
-        http_response.load_contents(String::from(page_filepath));
-
-        ServerStatus::Ok(Some(http_response))
-    }
-}
-
-enum ParsedRequest {
-    Ok(IncomingRequest),
-    Empty,
-    BadRequest,
-}
-
+/// An enum containing the path, headers and content from the incoming request
 #[derive(Debug)]
-struct IncomingRequest {
+#[allow(dead_code)]
+pub struct IncomingRequest {
     method: String,
     path: String,
     query: HashMap<String, String>,
     _version: String,
     headers: HashMap<String, String>,
+    cookies: HashMap<String, String>,
     body: String,
 }
 
 impl IncomingRequest {
+    ///Parses an HTTP request and returns a [ParsedRequest], also see [IncomingRequest]
+    ///
+    /// # Example
+    ///
+    /// ```text
+    /// POST /page?key1=value1&key2=value2 HTTP/1.1
+    /// First-Header: Value
+    /// Content-Length: 31
+    /// Content-Type: application/json 
+    ///
+    /// {
+    ///     "body":["thing1", "thing2"]
+    /// }
+    /// ```
+    /// will be converted to:
+    /// ```
+    /// IncomingRequest {
+    ///     method: "POST",
+    ///     path: "/page",
+    ///     query: {"key1":"value1", "key2", "value2"}
+    ///     _version: "1.1",
+    ///     headers: {"First-Header":"Value", "Content-Length":"31", "Content-Type":"application/json"}
+    ///     body: "{\n\t"body":["thing1", "thing2"]\n}"
+    /// }
     pub fn parse_request(mut stream: &TcpStream) -> ParsedRequest {
         let mut buf_reader = BufReader::new(&mut stream);
         let mut request_line = String::new();
         buf_reader.read_line(&mut request_line).unwrap();
-        
+
         let (method, uri, version) = match request_line.split_once(' ') {
             Some((method, rest)) => {
                 let (uri, version) = rest.split_once(' ').unwrap();
                 (method, uri, version)
             }
-            None => return ParsedRequest::BadRequest,
+            None => return ParsedRequest::Empty,
         };
-        
         let mut query_map: HashMap<String, String> = HashMap::new();
-        info!("URI = {}", uri);
         let (path, query_map): (String, HashMap<String, String>) = match uri.split_once('?') {
             Some((path, query)) => {
-                let parts = query.split('&');
-                parts.for_each(|s| {
-                    let (key, value) = s.split_once('=').unwrap_or(("",""));
-                    query_map.insert(key.to_string(), value.to_string());
-                });
-                (path.to_string(), query_map)
+                (path.to_string(), parse_hashmap(&query, "&", "="))
             }
             None => (uri.to_string(), HashMap::new()),
         };
-        
-        
         let mut headers_map: HashMap<String, String> = HashMap::new();
         loop {
             let mut line = String::new();
@@ -402,11 +167,14 @@ impl IncomingRequest {
             let mut header_splitted = line.split(":");
             let key = String::from(header_splitted.next().unwrap().trim_end());
             let value = String::from(header_splitted.next().unwrap().trim_end());
-            headers_map.insert(key, value);
+            headers_map.insert(key.to_lowercase(), value);
         }
-
+        let cookie_map = match headers_map.get("cookie") {
+            Some(s) => parse_hashmap(s, ";", "="),
+            None => HashMap::new(),
+        };
         let mut body = String::new();
-        let content_length = match headers_map.get("Content-Length") {
+        match headers_map.get("content-length") {
             None => 0usize,
             Some(v) => {
                 match v.trim().parse::<usize>() {
@@ -420,8 +188,352 @@ impl IncomingRequest {
                 }
             }
         };
+        let incoming = IncomingRequest {
+            method: method.to_string(), 
+            path: path,
+            query: query_map, 
+            _version: version.trim().to_string(),
+            headers: headers_map, 
+            cookies: cookie_map, 
+            body: body};
 
-        let incoming = IncomingRequest {method: method.to_string(), path: path, query: query_map, _version: version.to_string(), headers: headers_map, body: body};
         ParsedRequest::Ok(incoming)
     }
+
+    /// Converts the incoming request to a json String in the following format:
+    /// ```json
+    /// {
+    ///     "method":"GET",
+    ///     "path":"/index",
+    ///     "query":{"key1":"value1", "key2","value2"},
+    ///     "version":"1.1",
+    ///     "headers":{"accept-language":"en-US,en;q=0.9","cookie":"sessionID=9999;cookie2=hello"},
+    ///     "cookies":{"sessionID":"9999","cookie2":"hello"},
+    ///     "body":"",
+    /// }
+    /// ```
+    pub fn as_json(&self) -> String {
+        format!("{{
+            \"method\":\"{}\",
+            \"path\":\"{}\",
+            \"query\":{},
+            \"version\":\"{}\",
+            \"headers\":{},
+            \"cookies\":{},
+            \"body\":\"{}\"
+        }}", 
+        self.method,
+        self.path,
+        format!("{:?}", self.query).replace(" ", ""),
+        self._version,
+        format!("{:?}", self.headers).replace(" ", ""),
+        format!("{:?}", self.cookies).replace(" ", ""),
+        self.body)
+    }
 }
+
+/// An enum used by the [IncomingRequest::parse_request] method to handle empty and invalid requests
+pub enum ParsedRequest {
+    Ok(IncomingRequest),
+    Empty,
+    BadRequest,
+}
+
+/// An enum to store common HTTP error codes and OK for the [handle_connection] function
+pub enum HTTPCode {
+    Ok200 (MatchedRequest),
+    Err400,
+    Err401,
+    Err403,
+    Err404,
+}
+
+/// An enum to handle errors and prevent the threads from panicking, most functions in `request_handler.rs` uses this enum.
+/// The [handle_connection] function will send an Error 500 to the client if one of the functions returns `InternalError`.
+pub enum ServerStatus<T> {
+    Ok(T),
+    InternalError,
+}
+
+/// An enum to handle user authentication by the server, if the auth succeeds, the [Database::auth_user] function will
+/// returns `Ok(name, n)` where `n` is the auth level of the user.
+///
+/// # Auth levels:
+/// ```text
+/// 0: not logged in
+/// 255: admin
+/// ```
+pub enum UserAuth {
+    Ok (u8),
+    ErrAuth,
+}
+
+impl Database {
+    /// This function is to find the information (path, page/script filepath, auth level needed and query parameters) in the database and returns a [MatchedRequest]
+    pub fn match_request(&self, incoming: &IncomingRequest) -> ServerStatus<HTTPCode> {
+        let table = &format!("requests_{}", incoming.method.to_lowercase());
+        let key_column = "path";
+        let key = &incoming.path;
+
+        let request_result = match self.request_row(table, key_column, key) {
+            Ok(v) => v,
+            Err(_) => {return ServerStatus::InternalError}, 
+        };
+        if request_result.is_empty() {
+            return ServerStatus::Ok(HTTPCode::Err404);
+        }
+        let path = String::from(request_result.get("path").unwrap());
+        let callback = String::from(request_result.get("callback").unwrap());
+        let auth_level: u8 = match request_result.get("auth_level").unwrap().parse::<u8>() {
+            Ok(v) => v,
+            _ => 255,
+        };
+        let parameters: Vec<String> = match request_result.get("params") {
+            Some(v) => match v.as_str() {
+                "" => Vec::new(),
+                _ => v.split(";").map(|s| s.trim().to_string()).collect(),
+            },
+            None => {return ServerStatus::InternalError;}
+        };
+
+
+        if !parameters.is_empty() {
+            for key in &parameters {
+                if !incoming.query.contains_key(key) {
+                    return ServerStatus::Ok(HTTPCode::Err400);
+                }
+            }
+        }
+        
+        if auth_level > 0 {
+            let user_auth_level = match self.auth_user(incoming) {
+                ServerStatus::Ok(v) => match v {
+                    UserAuth::Ok(v) => v,
+                    _ => {return ServerStatus::Ok(HTTPCode::Err401)},
+                },
+                _ => {error!("Error when trying to get user auth level");
+                    return ServerStatus::InternalError},
+            };
+
+            if user_auth_level < auth_level {
+                return ServerStatus::Ok(HTTPCode::Err403);
+            }
+        }
+        ServerStatus::Ok(HTTPCode::Ok200(MatchedRequest {path: path, callback: callback, auth_level: auth_level, params: parameters}))
+    }
+
+    /// This function will look in the database for a valid `sessionID` found in the [IncomingRequest]'s cookies field and will return the auth_level of this user.
+    fn auth_user(&self, incoming: &IncomingRequest) -> ServerStatus<UserAuth> {
+        let session_id = match incoming.cookies.get("sessionID") {
+            Some(v) => v,
+            None => {return ServerStatus::Ok(UserAuth::ErrAuth)}
+        };
+        let time_now = SystemTime::now().duration_since(UNIX_EPOCH).expect("ERROR: TIME WENT BACKWARDS").as_secs();
+        let result = match self.request_row("users", "sessionID", session_id) {
+            Ok(v) => v,
+            Err(_) => {return ServerStatus::InternalError}, 
+        };
+        let auth_level = match result.get("auth_level") {
+            Some(v) => match v.parse::<u8>() {
+                Ok(v) => ServerStatus::Ok(UserAuth::Ok(v)),
+                Err(_) => ServerStatus::InternalError
+            },
+            None => ServerStatus::InternalError
+        };
+        let expires = match result.get("sessionExpires") {
+            Some(v) => match v.parse::<u64>() {
+                Ok(v) => v,
+                Err(_) => {return ServerStatus::InternalError;},
+            },
+            None => {return ServerStatus::InternalError;},
+        };
+        if expires <= time_now {
+            return ServerStatus::Ok(UserAuth::ErrAuth);
+        }
+        auth_level
+    }
+
+    ///This function will look in the database in the `errors` table for where to find the content to send to the client when an error occurs
+    ///
+    /// # Example
+    /// ```
+    /// let database = WebserverDatabase::new("database.db")
+    /// let error = HTTPCode::Err401
+    /// let content = match database.get_error(error) {
+    ///     ServerStatus::Ok(v) => v.unwrap()
+    /// }
+    pub fn get_error(&self, httpcode: HTTPCode) -> ServerStatus<Option<HTTPResponse>> {
+        let error_name = match httpcode {
+            HTTPCode::Ok200 (_) => {return ServerStatus::Ok(None)},
+            HTTPCode::Err400 => "err400",
+            HTTPCode::Err401 => "err401",
+            HTTPCode::Err403 => "err403",
+            HTTPCode::Err404 => "err404",
+        };
+
+        let request_result = match self.request_row("errors", "name", error_name) {
+            Ok(v) => v,
+            Err(_) => {return ServerStatus::InternalError;},
+        };
+
+        let (response_message, page_filepath) = match (request_result.get("response_message"), request_result.get("callback")) {
+            (Some(v1), Some(v2)) => (v1, v2),
+            _ => {return ServerStatus::InternalError;},
+        };
+
+        let error_code: u32 = error_name[3..].parse::<u32>().unwrap(); 
+        let mut http_response = HTTPResponse::new(error_code, String::from(response_message));
+        http_response.load_contents(String::from(page_filepath), error_name);
+
+        ServerStatus::Ok(Some(http_response))
+    }
+}
+
+/// A struct returned by the [Database::match_request] function that searches in the database for a page corresponding to the path requested.
+pub struct MatchedRequest {
+    path: String, 
+    callback: String,
+    auth_level: u8,
+    params: Vec<String>,
+}
+
+/// A struct representing the response that will be sent by the server to the client
+pub struct HTTPResponse {
+    response_code: u32,
+    response_message: String,
+    headers: HashMap<String, String>,
+    content_length: usize,
+    contents: String,
+}
+
+impl HTTPResponse {
+    ///Creates a new HTTPResponse object
+    fn new(response_code: u32, response_message: String) -> HTTPResponse {
+        let http_response = HTTPResponse {response_code, response_message, headers: HashMap::new(), content_length: 0usize, contents: String::new()};
+        http_response
+    }
+
+    ///Uses the [MatchedRequest] containing the file the user requested and other informations and returns a valid HTTPResponse object
+    pub fn from_matched_request(matched_request: MatchedRequest, incoming_request: IncomingRequest) -> ServerStatus<HTTPResponse> {
+        let mut http_response = HTTPResponse::new(200, String::from("OK"));
+        match http_response.load_contents(matched_request.callback, &incoming_request.as_json()) {
+            ServerStatus::Ok(()) => (),
+            ServerStatus::InternalError => return ServerStatus::InternalError,
+        };
+        ServerStatus::Ok(http_response)
+    }
+
+    /// Loads/runs the content from a file which path was given
+    ///
+    /// # Example
+    ///
+    /// myfile.json:
+    /// ```
+    /// {
+    /// "hello": "world"
+    /// }
+    /// ```
+    /// main.rs:
+    /// ```
+    /// let response = HTTPResponse::new(200, String::from("OK"))
+    /// response.load_contents(String::from("myfile.json"), "");
+    /// println!("{}", response.contents);
+    /// ```
+    fn load_contents(&mut self, filename: String, script_args: &str) -> ServerStatus<()> {
+        let result = match (&filename).split('.').last().unwrap_or("") {
+            "py" => run_python(&filename, script_args),
+            "js" => run_js(&filename, script_args),
+            _ => match fs::read_to_string(&filename) {
+                Ok(v) => Ok(v),
+                _ => Err(String::from(format!("Error when loading text file {}", filename))),
+            },
+        };
+        let contents = match result {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Error when accessing content:\n{}", e);
+                return ServerStatus::InternalError;
+            }
+        };
+        match (&filename).split('.').last().unwrap_or("") {
+            "py"|"js" => {
+                let (headers, body): (HashMap<String, String>, String) = match contents.split_once("\r\n\r\n") {
+                    Some((h,b)) => (parse_hashmap(h, "\r\n", ":"), b.to_string()),
+                    None => (HashMap::new(), contents),
+                };
+                debug!("headers: {:#?}\nbody: {}", headers, body);
+                self.add_headers(headers);
+                self.set_contents(body);
+            } 
+            _ => {self.set_contents(contents);}
+        }
+        ServerStatus::Ok(())
+    }
+
+    /// Sets the content from the given string
+    /// 
+    /// #Example
+    /// ```
+    /// let response = HTTPResponse::new(200, String::from("OK"))
+    /// let content = String::from("Hello World");
+    /// response.set_contents("Hello World");
+    /// println!("{}", response.contents);
+    /// ```
+    fn set_contents(&mut self, contents: String) {
+        self.contents = contents;
+        self.update_content_length();
+    }
+
+    /// Updates the `Content-Length` header
+    fn update_content_length(&mut self) {
+        self.content_length = self.contents.len();
+    }
+
+    /// Adds headers in the response from a given [HashMap]
+    fn add_headers(&mut self, headers: HashMap<String, String>) {
+        self.headers.extend(headers);
+    }
+
+    /// Converts the [HTTPResponse] back to a [String]
+    fn prepare_response(&self) -> String {
+        let mut headers_fmt = String::new();
+        self.headers.iter().for_each(|(k,v)| {
+            headers_fmt = format!("{}{}: {}\r\n", headers_fmt, k, v);
+        });
+        format!("HTTP/1.1 {} {}\r\n{}Content-Length: {}\r\n\r\n{}", 
+            self.response_code,
+            self.response_message,
+            headers_fmt,
+            self.content_length,
+            self.contents)
+    }
+}
+
+pub fn parse_hashmap(target: &str, entries_separator: &str, key_value_separator: &str) -> HashMap<String, String> {
+    let mut result: HashMap<String, String> = HashMap::new();
+    let entries = target.split(entries_separator);
+    entries.for_each(|e| {
+        match e.split_once(key_value_separator) {
+            Some((k,v)) => {result.insert(k.trim().to_string(),v.trim().to_string()); ()},
+            None => ()
+        };
+    });
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::request_handler::*;
+    #[test]
+    fn test_parse_hashmap() {
+        let hashmap_test: HashMap<String, String> = HashMap::from([(String::from("sessionID"), String::from("1")),(String::from("cookie2"), String::from("hello"))]);
+        let target = " sessionID=1; cookie2=hello; nonvalid";
+        let parsed_hashmap = parse_hashmap(target, ";", "=");
+        assert_eq!(hashmap_test,parsed_hashmap);
+    }
+}
+
+
+
+
+
