@@ -16,6 +16,13 @@ use crate::thread_pool::*;
 use crate::request_handler::*;
 
 fn main() {
+    let mut pythonpath = env::var_os("PYTHONPATH").unwrap_or(std::ffi::OsString::new()).into_string().unwrap_or(String::new());
+    let binding = env::current_dir().unwrap();
+    let current_dir = binding.to_str().unwrap();
+    pythonpath.push_str(":");
+    pythonpath.push_str(current_dir);
+    env::set_var("PYTHONPATH", &pythonpath);
+
     let server_config_file: String = match env::var("SERVER_CONFIG") {
         Ok(v) => v,
         _ => panic!("Didn't found server config file, the path is stored in the SERVER_CONFIG env variable"),

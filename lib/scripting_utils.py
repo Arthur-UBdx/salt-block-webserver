@@ -6,8 +6,8 @@ import sys
 DIR = os.path.abspath(os.curdir)
 
 class Database:
-    def __init__(self,filename):
-        self.filepath = os.path.join(DIR,filename)
+    def __init__(self):
+        self.filepath = Config().get("database")
         
     def insert(self,table,kwargs):
         with sql.connect(self.filepath) as conn:
@@ -41,8 +41,8 @@ class Config():
         with open(config_file_path) as f:
             self.config = json.load(f)
             
-    def get_value(self, value: str) -> str:
-        return self.config[value]
+    def get(self, key: str) -> str:
+        return self.config[key]
     
 class Interface():
     def parse_input() -> dict:
@@ -57,3 +57,11 @@ class Interface():
             output += f"{k}:{v}\r\n"
         output += f"\r\n{body}"
         return output
+    
+    def parse_body_query() -> dict:
+        result = {}
+        body:str = Interface.parse_input()["body"]
+        for s in body.split("&"):
+            parts = s.split("=")
+            result[parts[0]] = parts[1]
+        return result

@@ -81,11 +81,11 @@ pub fn handle_connection(mut stream: TcpStream, database_filepath: &str) {
 
     let response = match http_code {
         HTTPCode::Ok200(v) => {match HTTPResponse::from_matched_request(v, incoming_request) {
-            ServerStatus::Ok(v) => v.prepare_response(),
+            ServerStatus::Ok(mut v) => v.prepare_response(),
             _ => {send!(stream, ERR500);}
         }},
         _ => {
-            let http_response = match database.get_error(http_code) {
+            let mut http_response = match database.get_error(http_code) {
                 ServerStatus::Ok(Some(v)) => v,
                 _ => {send!(stream, ERR500);}
             };
@@ -250,6 +250,7 @@ pub enum HTTPCode {
 
 /// An enum to handle errors and prevent the threads from panicking, most functions in `request_handler.rs` uses this enum.
 /// The [handle_connection] function will send an Error 500 to the client if one of the functions returns `InternalError`.
+#[derive(Debug)]
 pub enum ServerStatus<T> {
     Ok(T),
     InternalError,
@@ -263,6 +264,7 @@ pub enum ServerStatus<T> {
 /// 0: not logged in
 /// 255: admin
 /// ```
+#[derive(Debug)]
 pub enum UserAuth {
     Ok (u8),
     ErrAuth,
@@ -295,8 +297,6 @@ impl Database {
             },
             None => {return ServerStatus::InternalError;}
         };
-
-
         if !parameters.is_empty() {
             for key in &parameters {
                 if !incoming.query.contains_key(key) {
@@ -304,7 +304,6 @@ impl Database {
                 }
             }
         }
-        
         if auth_level > 0 {
             let user_auth_level = match self.auth_user(incoming) {
                 ServerStatus::Ok(v) => match v {
@@ -338,14 +337,15 @@ impl Database {
                 Ok(v) => ServerStatus::Ok(UserAuth::Ok(v)),
                 Err(_) => ServerStatus::InternalError
             },
-            None => ServerStatus::InternalError
+            None => ServerStatus::Ok(UserAuth::ErrAuth)
         };
+        println!("{:?}",auth_level);
         let expires = match result.get("sessionExpires") {
             Some(v) => match v.parse::<u64>() {
                 Ok(v) => v,
                 Err(_) => {return ServerStatus::InternalError;},
             },
-            None => {return ServerStatus::InternalError;},
+            None => {return ServerStatus::Ok(UserAuth::ErrAuth);},
         };
         if expires <= time_now {
             return ServerStatus::Ok(UserAuth::ErrAuth);
@@ -495,7 +495,10 @@ impl HTTPResponse {
     }
 
     /// Converts the [HTTPResponse] back to a [String]
-    fn prepare_response(&self) -> String {
+    fn prepare_response(&mut self) -> String {
+        if self.headers.contains_key("Location") {
+            (self.response_code, self.response_message) = (301u32, "MOVED PERMAENTLY".to_string());
+        }
         let mut headers_fmt = String::new();
         self.headers.iter().for_each(|(k,v)| {
             headers_fmt = format!("{}{}: {}\r\n", headers_fmt, k, v);
