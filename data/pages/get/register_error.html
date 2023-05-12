@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Log in</title>
+    <title>Sign up</title>
     <style>
         body {
             font-family: Arial, Helvetica, sans-serif;
@@ -44,6 +44,7 @@
             opacity: 0.9;
             border-radius: 5px;
         }
+
         .error_message {
             color: red;
             font: italic;
@@ -57,17 +58,24 @@
 <body>
     <div class="spacer"></div>
     <div class="container">
-    <h1>Log in</h1>
-    <form action="/login" method="post">
+    <h1>Register</h1>
+    <form action="/register" method="post">
         <label for="username"><b>Username</b></label><br>
         <input type="text" placeholder="Enter username" name="username" maxlength="25" required><br>
+
+        <label for="email"><b>E-mail</b></label><br>
+        <input type="text" placeholder="Enter e-mail" name="email" maxlength="50" required><br>
 
         <label for="password"><b>Password</b></label><br>
         <input type="password" placeholder="Enter password" name="password" maxlength="100" required><br>
 
-        <button type="submit" class="register-button"><b>Log in</b></button>
+        <label for="cpwd"><b>Confirm password</b></label><br>
+        <input type="password" placeholder="Confirm password" name="cpwd" maxlength="100" required><br>
+
+        <button type="submit" class="register-button"><b>Register</b></button>
     </form>
     <p class="error_message">{{error_message}}</p>
     </div>
+    <div style="text-align:center"><a href="/login", style="display:inline-block;padding:10px;margin:10px">Log in</div>
 </body>
 </html>

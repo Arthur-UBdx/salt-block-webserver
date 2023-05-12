@@ -45,6 +45,11 @@
             border-radius: 5px;
         }
 
+        .error_message {
+            color: red;
+            font: italic;
+        }
+
         .spacer {
             padding: 60px;
         }
@@ -63,6 +68,8 @@
 
         <button type="submit" class="register-button"><b>Log in</b></button>
     </form>
+    <p class="error_message">{{error_message}}</p>
     </div>
+    <div style="text-align:center"><a href="/register", style="display:inline-block;padding:10px;margin:10px">Sign up</div>
 </body>
 </html>

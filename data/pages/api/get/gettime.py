@@ -1,3 +1,4 @@
+from lib.scripting_utils import *
 import time
 
 result = '''{
@@ -9,4 +10,4 @@ result = '''{
     }]
 }'''
 
-print(result)
+Interface.send_to_http({}, result)

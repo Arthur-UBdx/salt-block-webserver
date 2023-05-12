@@ -2,6 +2,8 @@ import sqlite3 as sql
 import json
 import os
 import sys
+import hashlib
+from time import time
 
 DIR = os.path.abspath(os.curdir)
 
@@ -35,6 +37,14 @@ class Database:
             else:
                 return None
             
+    def auth_user(self, session_id:str) -> dict:
+        result:dict = self.get_row("users", "sessionID", session_id)
+        if not result or result["sessionExpires"] < int(time()):
+            return None
+        else:
+            return result
+        
+            
 class Config():
     def __init__(self):
         config_file_path = os.environ.get('SERVER_CONFIG')
@@ -44,19 +54,23 @@ class Config():
     def get(self, key: str) -> str:
         return self.config[key]
     
-class Interface():
+class Interface:
     def parse_input() -> dict:
-        return Interface.parse_json(sys.argv[1])
-        
-    def parse_json(target:str) -> dict:
-        return json.loads(target)
+        try: requests = json.loads(sys.argv[1])
+        except: return None
+        else:  return requests
     
-    def export_to_http(headers:dict, body:str) -> str:
+    def export_to_http(headers:dict, body:bytes) -> bytes:
         output = ""
-        for k,v in headers.items():
-            output += f"{k}:{v}\r\n"
-        output += f"\r\n{body}"
-        return output
+        for k,v in headers.items(): output += f"{k}:{v}\r\n"
+        return bytes(output, "utf-8") + b"\r\n" + body
+
+    def send_to_http(headers:dict, body):
+        if type(body) != bytes: body = bytes(body, "utf-8")
+        data = Interface.export_to_http(headers, body)
+        sys.stdout.buffer.write(data)
+        sys.stdout.flush()
+        sys.exit()
     
     def parse_body_query() -> dict:
         result = {}
@@ -65,3 +79,7 @@ class Interface():
             parts = s.split("=")
             result[parts[0]] = parts[1]
         return result
+    
+    def sha256(message:str) -> str:
+        return hashlib.sha256(message.encode()).hexdigest()
+    

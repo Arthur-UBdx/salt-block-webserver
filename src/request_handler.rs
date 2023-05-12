@@ -24,7 +24,6 @@ use crate::database_utils::Database;
 /// }
 /// ```
 static ERR500: &str = "HTTP/1.1 500 INTERNAL SERVER ERROR\r\nContent-Length: 188\r\n\r\n{\n    \"status\":\"error\",\n    \"status_code\":\"500\",\n    \"message\":\"internal server error\",\n    \"result\":[\"There was an internal server error, if the issue persists please contact support.\"]\n}";
-
 /// Sends back to the client `stream` the message `msg`
 ///
 /// # Example
@@ -37,8 +36,7 @@ static ERR500: &str = "HTTP/1.1 500 INTERNAL SERVER ERROR\r\nContent-Length: 188
 macro_rules! send {
     ($stream: expr, $msg:expr) => {
         {
-            if $msg.len() > 500 {debug!("Sending Response \n\"{}\"", $msg);}
-            $stream.write_all($msg.as_bytes()).unwrap();
+            $stream.write_all($msg).unwrap();
             $stream.flush().unwrap();
             return;
         }
@@ -61,12 +59,12 @@ pub fn handle_connection(mut stream: TcpStream, database_filepath: &str) {
         ParsedRequest::Empty => {return},
         ParsedRequest::BadRequest => {
             warn!("An invalid request has been formulated by {}", stream.peer_addr().unwrap_or(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 7878)));
-            let http_response = match database.get_error(HTTPCode::Err400) {
+            let mut http_response = match database.get_error(HTTPCode::Err400, &IncomingRequest::new()) {
                 ServerStatus::Ok(Some(v)) => v,
-                _ => {send!(stream, ERR500);}
+                _ => {send!(stream, ERR500.as_bytes());}
             };
-            let response = format!("HTTP/1.1 400 BAD REQUEST\r\nContent-Length: {}\r\n\r\n{}", http_response.content_length, http_response.contents);
-            send!(stream, response);
+            let response = http_response.prepare_response();
+            send!(stream, &response);
         }
     };
 
@@ -75,26 +73,29 @@ pub fn handle_connection(mut stream: TcpStream, database_filepath: &str) {
     let http_code = match database.match_request(&incoming_request) {
         ServerStatus::Ok(v) => v,
         ServerStatus::InternalError => {
-            send!(stream, ERR500)
+            send!(stream, ERR500.as_bytes())
         },
     };
 
     let response = match http_code {
         HTTPCode::Ok200(v) => {match HTTPResponse::from_matched_request(v, incoming_request) {
             ServerStatus::Ok(mut v) => v.prepare_response(),
-            _ => {send!(stream, ERR500);}
+            _ => {send!(stream, ERR500.as_bytes());}
         }},
         _ => {
-            let mut http_response = match database.get_error(http_code) {
+            let mut http_response = match database.get_error(http_code, &incoming_request) {
                 ServerStatus::Ok(Some(v)) => v,
-                _ => {send!(stream, ERR500);}
+                _ => {send!(stream, ERR500.as_bytes());}
             };
             http_response.prepare_response()
         }
     };
-    
-    debug!("{}", response);
-    send!(stream, response);
+    match std::str::from_utf8(&response) {
+        Ok(v) => debug!("{}", v),
+        Err(_) => debug!("{:?}", response),
+    }
+
+    send!(stream, &response);
 }
 
 //--//
@@ -113,7 +114,19 @@ pub struct IncomingRequest {
 }
 
 impl IncomingRequest {
-    ///Parses an HTTP request and returns a [ParsedRequest], also see [IncomingRequest]
+
+    /// Creates a new empty IncomingRequest object
+    pub fn new() -> IncomingRequest {
+        IncomingRequest {
+            method: String::new(), 
+            path: String::new(),
+            query: HashMap::new(), 
+            _version: String::new(),
+            headers: HashMap::new(), 
+            cookies: HashMap::new(), 
+            body: String::new()}
+    }
+    /// Parses an HTTP request and returns a [ParsedRequest], also see [IncomingRequest]
     ///
     /// # Example
     ///
@@ -149,7 +162,6 @@ impl IncomingRequest {
             }
             None => return ParsedRequest::Empty,
         };
-        let mut query_map: HashMap<String, String> = HashMap::new();
         let (path, query_map): (String, HashMap<String, String>) = match uri.split_once('?') {
             Some((path, query)) => {
                 (path.to_string(), parse_hashmap(&query, "&", "="))
@@ -308,7 +320,7 @@ impl Database {
             let user_auth_level = match self.auth_user(incoming) {
                 ServerStatus::Ok(v) => match v {
                     UserAuth::Ok(v) => v,
-                    _ => {return ServerStatus::Ok(HTTPCode::Err401)},
+                    UserAuth::ErrAuth => {return ServerStatus::Ok(HTTPCode::Err401)},
                 },
                 _ => {error!("Error when trying to get user auth level");
                     return ServerStatus::InternalError},
@@ -339,7 +351,6 @@ impl Database {
             },
             None => ServerStatus::Ok(UserAuth::ErrAuth)
         };
-        println!("{:?}",auth_level);
         let expires = match result.get("sessionExpires") {
             Some(v) => match v.parse::<u64>() {
                 Ok(v) => v,
@@ -362,7 +373,7 @@ impl Database {
     /// let content = match database.get_error(error) {
     ///     ServerStatus::Ok(v) => v.unwrap()
     /// }
-    pub fn get_error(&self, httpcode: HTTPCode) -> ServerStatus<Option<HTTPResponse>> {
+    pub fn get_error(&self, httpcode: HTTPCode, incoming_request: &IncomingRequest) -> ServerStatus<Option<HTTPResponse>> {
         let error_name = match httpcode {
             HTTPCode::Ok200 (_) => {return ServerStatus::Ok(None)},
             HTTPCode::Err400 => "err400",
@@ -383,13 +394,14 @@ impl Database {
 
         let error_code: u32 = error_name[3..].parse::<u32>().unwrap(); 
         let mut http_response = HTTPResponse::new(error_code, String::from(response_message));
-        http_response.load_contents(String::from(page_filepath), error_name);
+        http_response.load_contents(String::from(page_filepath), &incoming_request.as_json());
 
         ServerStatus::Ok(Some(http_response))
     }
 }
 
 /// A struct returned by the [Database::match_request] function that searches in the database for a page corresponding to the path requested.
+#[allow(dead_code)]
 pub struct MatchedRequest {
     path: String, 
     callback: String,
@@ -402,14 +414,13 @@ pub struct HTTPResponse {
     response_code: u32,
     response_message: String,
     headers: HashMap<String, String>,
-    content_length: usize,
-    contents: String,
+    contents: Vec<u8>,
 }
 
 impl HTTPResponse {
     ///Creates a new HTTPResponse object
     fn new(response_code: u32, response_message: String) -> HTTPResponse {
-        let http_response = HTTPResponse {response_code, response_message, headers: HashMap::new(), content_length: 0usize, contents: String::new()};
+        let http_response = HTTPResponse {response_code, response_message, headers: HashMap::new(), contents: Vec::new()};
         http_response
     }
 
@@ -443,12 +454,12 @@ impl HTTPResponse {
         let result = match (&filename).split('.').last().unwrap_or("") {
             "py" => run_python(&filename, script_args),
             "js" => run_js(&filename, script_args),
-            _ => match fs::read_to_string(&filename) {
+            _ => match fs::read(&filename) {
                 Ok(v) => Ok(v),
                 _ => Err(String::from(format!("Error when loading text file {}", filename))),
             },
         };
-        let contents = match result {
+        let mut contents = match result {
             Ok(v) => v,
             Err(e) => {
                 error!("Error when accessing content:\n{}", e);
@@ -457,13 +468,12 @@ impl HTTPResponse {
         };
         match (&filename).split('.').last().unwrap_or("") {
             "py"|"js" => {
-                let (headers, body): (HashMap<String, String>, String) = match contents.split_once("\r\n\r\n") {
-                    Some((h,b)) => (parse_hashmap(h, "\r\n", ":"), b.to_string()),
+                let (headers, body): (HashMap<String, String>, Vec<u8>) = match contents.split_once(&[13u8,10u8,13u8,10u8]) { //[13u8,10u8,13u8,10u8] <=> b"\r\n\r\n"
+                    Some((h,b)) => (parse_hashmap(std::str::from_utf8(&h).unwrap(), "\r\n", ":"), b),
                     None => (HashMap::new(), contents),
                 };
-                debug!("headers: {:#?}\nbody: {}", headers, body);
-                self.add_headers(headers);
                 self.set_contents(body);
+                self.add_headers(headers);
             } 
             _ => {self.set_contents(contents);}
         }
@@ -479,14 +489,14 @@ impl HTTPResponse {
     /// response.set_contents("Hello World");
     /// println!("{}", response.contents);
     /// ```
-    fn set_contents(&mut self, contents: String) {
+    fn set_contents(&mut self, contents: Vec<u8>) {
         self.contents = contents;
         self.update_content_length();
     }
 
     /// Updates the `Content-Length` header
     fn update_content_length(&mut self) {
-        self.content_length = self.contents.len();
+        self.headers.insert("Content-Length".to_string(), format!("{}", self.contents.len()));
     }
 
     /// Adds headers in the response from a given [HashMap]
@@ -494,21 +504,22 @@ impl HTTPResponse {
         self.headers.extend(headers);
     }
 
-    /// Converts the [HTTPResponse] back to a [String]
-    fn prepare_response(&mut self) -> String {
+    /// Converts the [HTTPResponse] back to bytes / [Vec]<u8>
+    fn prepare_response(&mut self) -> Vec<u8> {
+        debug!("Headers {:#?}", self.headers);
         if self.headers.contains_key("Location") {
-            (self.response_code, self.response_message) = (301u32, "MOVED PERMAENTLY".to_string());
+            (self.response_code, self.response_message) = (302u32, "FOUND".to_string());
         }
         let mut headers_fmt = String::new();
         self.headers.iter().for_each(|(k,v)| {
             headers_fmt = format!("{}{}: {}\r\n", headers_fmt, k, v);
         });
-        format!("HTTP/1.1 {} {}\r\n{}Content-Length: {}\r\n\r\n{}", 
+        let mut bytes: Vec<u8> = format!("HTTP/1.1 {} {}\r\n{}\r\n", 
             self.response_code,
             self.response_message,
-            headers_fmt,
-            self.content_length,
-            self.contents)
+            headers_fmt).as_bytes().to_vec();
+        bytes.append(&mut self.contents);
+        bytes
     }
 }
 
@@ -536,7 +547,22 @@ mod tests {
     }
 }
 
+trait SplitOnce {
+    fn split_once(&mut self, delimiter: &[u8]) -> Option<(Vec<u8>, Vec<u8>)>;
+}
 
+impl SplitOnce for Vec<u8> {
+    fn split_once(&mut self, delimiter: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
+        if let Some(index) = self.windows(delimiter.len()).position(|w| w == delimiter) {
+            let left = self.drain(..index).collect();
+            self.drain(..delimiter.len());
+            let right = self.drain(..).collect();
+            Some((left, right))
+        } else {
+            None
+        }
+    }
+}
 
 
 

@@ -2,5 +2,5 @@
     "status":"error",
     "status_code":"400",
     "message":"Bad request",
-    "result":["There is a problem in the request you made, either arguments were needed or there was a fail when trying to parse 'Content-Length' header."]
+    "result":["There is a problem in the request you made, either query arguments were needed or there was a fail when trying to parse 'Content-Length' header."]
 }

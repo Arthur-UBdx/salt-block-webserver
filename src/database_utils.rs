@@ -5,6 +5,7 @@ pub struct Database {
     filepath: String,
 }
 
+#[allow(dead_code)]
 impl Database {
     pub fn new(filepath: &str) -> Database {
         Database {filepath: filepath.to_string()}
