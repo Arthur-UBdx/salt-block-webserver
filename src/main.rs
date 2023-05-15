@@ -25,7 +25,10 @@ fn main() {
 
     let server_config_file: String = match env::var("SERVER_CONFIG") {
         Ok(v) => v,
-        _ => {println!("WARN: didn't found any file specified in SERVER_CONFIG env variable, defaulting to 'data/config.json'"); "data/config.json".to_string()},
+        _ => {
+            env::set_var("SERVER_CONFIG", "data/config.json");
+            println!("WARN: didn't found any file specified in SERVER_CONFIG env variable, defaulting to 'data/config.json'");
+            "data/config.json".to_string()},
     };
     let mut config_string = fs::read_to_string(server_config_file).unwrap();
     config_string = config_string.replace("\"", "")

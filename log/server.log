@@ -1,0 +1,8 @@
+18:00:04 [ERROR] Error when accessing content:
+Error when loading text file data/pages/get/homepage.html
+18:09:02 [ERROR] Error when accessing content:
+Traceback (most recent call last):
+  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/pages/get/homepage.py", line 5, in <module>
+    if "sessionID" not in list(cookies.keys()): Interface.send_file("data/pages/get/homepage_unauth.html")
+TypeError: Interface.send_file() missing 1 required positional argument: 'filename'
+

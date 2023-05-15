@@ -114,7 +114,6 @@ pub struct IncomingRequest {
 }
 
 impl IncomingRequest {
-
     /// Creates a new empty IncomingRequest object
     pub fn new() -> IncomingRequest {
         IncomingRequest {
@@ -246,7 +245,7 @@ impl IncomingRequest {
 
 /// An enum used by the [IncomingRequest::parse_request] method to handle empty and invalid requests
 pub enum ParsedRequest {
-    Ok(IncomingRequest),
+    Ok (IncomingRequest),
     Empty,
     BadRequest,
 }
@@ -264,7 +263,7 @@ pub enum HTTPCode {
 /// The [handle_connection] function will send an Error 500 to the client if one of the functions returns `InternalError`.
 #[derive(Debug)]
 pub enum ServerStatus<T> {
-    Ok(T),
+    Ok (T),
     InternalError,
 }
 

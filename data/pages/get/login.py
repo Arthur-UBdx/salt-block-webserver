@@ -2,7 +2,7 @@ from lib.scripting_utils import *
 from jinja2 import Template
 
 database = Database()
-request = Interface.parse_input()
+request = Interface.parse_incoming_request()
 
 try:
     session_id = request["cookies"]["sessionID"]

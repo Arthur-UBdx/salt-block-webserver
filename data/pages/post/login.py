@@ -17,7 +17,7 @@ response_headers:dict = {}
 config = Config()
 database = Database()
 body:dict = Interface.parse_body_query()
-request:dict = Interface.parse_input()
+request:dict = Interface.parse_incoming_request()
 
 row = database.get_row("users", "username" , body["username"])
 if not row: send_error()

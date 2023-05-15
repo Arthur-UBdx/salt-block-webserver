@@ -55,7 +55,7 @@ class Config():
         return self.config[key]
     
 class Interface:
-    def parse_input() -> dict:
+    def parse_incoming_request() -> dict:
         try: requests = json.loads(sys.argv[1])
         except: return None
         else:  return requests
@@ -71,6 +71,10 @@ class Interface:
         sys.stdout.buffer.write(data)
         sys.stdout.flush()
         sys.exit()
+        
+    def send_file(headers:dict, filename:str):
+        with open(filename, "rb") as f: data=f.read()
+        Interface.send_to_http(headers, data)
     
     def parse_body_query() -> dict:
         result = {}
