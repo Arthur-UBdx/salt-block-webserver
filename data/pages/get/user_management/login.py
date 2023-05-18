@@ -13,7 +13,7 @@ if session_id: auth = database.auth_user(session_id)
 else: auth = None
 
 if not auth:
-    with open("data/pages/get/login.html") as f:
+    with open("data/pages/get/user_management/login.html") as f:
         template:Template = Template(f.read())
         
     html_content = template.render(error_message=f"")

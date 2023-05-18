@@ -4,11 +4,11 @@ import re
 from jinja2 import Template
 
 def send_error(message:str):
-    with open("data/pages/get/register_error.html") as f:
+    with open("data/pages/get/user_management/register_error.html") as f:
         template:Template = Template(f.read())
 
     html_content = template.render(error_message=message)
-    Interface.send_to_http({}, html_content)
+    Interface.send_to_http(200, "OK", {}, html_content)
     
 database = Database()
 body = Interface.parse_body_query()
@@ -36,4 +36,4 @@ session_expires = now + session_expiration_time
 
 pwdhash = Interface.sha256("{}{}".format(body["username"], body["password"]))
 database.insert("users", {"username":body["username"], "hash":pwdhash, "credits":0, "auth_level":1, "email":body["email"]})
-Interface.send_to_http({"Location":"/", "Set-Cookie": "sessionID={}; Max-Age={}; HttpOnly".format(session_id, session_expiration_time)}, "")
+Interface.send_to_http(200, "OK", {"Location":"/", "Set-Cookie": "sessionID={}; Max-Age={}; HttpOnly".format(session_id, session_expiration_time)}, "")

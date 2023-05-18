@@ -1,0 +1,6 @@
+{
+    "status":"error",
+    "status_code":"404",
+    "message":"not found",
+    "result":["The ressource you asked was not found for the method you used"]
+}

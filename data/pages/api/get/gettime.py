@@ -10,4 +10,4 @@ result = '''{
     }]
 }'''
 
-Interface.send_to_http({}, result)
+Interface.send_to_http(200, "OK", {}, result)

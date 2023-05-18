@@ -1,8 +1,34 @@
-18:00:04 [ERROR] Error when accessing content:
-Error when loading text file data/pages/get/homepage.html
-18:09:02 [ERROR] Error when accessing content:
+13:33:59 [ERROR] Error when accessing content:
 Traceback (most recent call last):
-  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/pages/get/homepage.py", line 5, in <module>
-    if "sessionID" not in list(cookies.keys()): Interface.send_file("data/pages/get/homepage_unauth.html")
-TypeError: Interface.send_file() missing 1 required positional argument: 'filename'
+  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/assets/ressource.py", line 42, in <module>
+    case "image": send_ressource(
+  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/assets/ressource.py", line 17, in send_ressource
+    if filename == extension: send_error(400, "BAD REQUEST")
+  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/assets/ressource.py", line 8, in send_error
+    Interface.send_to_http(code, message,{}, body)
+TypeError: Interface.send_to_http() takes 3 positional arguments but 4 were given
+
+13:34:31 [ERROR] Error when accessing content:
+Traceback (most recent call last):
+  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/assets/ressource.py", line 42, in <module>
+    case "image": send_ressource(
+  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/assets/ressource.py", line 21, in send_ressource
+    Interface.send_to_http(200, headers, data)
+TypeError: Interface.send_to_http() missing 1 required positional argument: 'body'
+
+13:35:14 [ERROR] Error when accessing content:
+Traceback (most recent call last):
+  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/assets/ressource.py", line 42, in <module>
+    case "image": send_ressource(
+  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/assets/ressource.py", line 18, in send_ressource
+    if not (extension in accepted_extensions): send_error(400)
+TypeError: send_error() missing 1 required positional argument: 'message'
+
+13:35:45 [ERROR] Error when accessing content:
+Traceback (most recent call last):
+  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/assets/ressource.py", line 42, in <module>
+    case "image": send_ressource(
+  File "/mnt/d/Programmation/Rust/projects/webserver-rs/data/assets/ressource.py", line 18, in send_ressource
+    if not (extension in accepted_extensions): send_error(400)
+TypeError: send_error() missing 1 required positional argument: 'message'
 

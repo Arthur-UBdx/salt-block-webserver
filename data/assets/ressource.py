@@ -2,26 +2,26 @@ from lib.scripting_utils import *
 import json
 import base64
 
-def send_error(code:int):
-    with open(f"data/pages/errors/{code}.json") as f:
+def send_error(code:int, message:str):
+    with open(f"data/assets/err{code}.json") as f:
         body = f.read()
-    Interface.send_to_http({}, body)
+    Interface.send_to_http(code, message, {}, body)
     
 def read_file(filename) -> bytes:
-    try: 
+    try:
         with open(filename, "rb") as file: return file.read()
     except: return None
     
 def send_ressource(filename:str, accepted_extensions:list, headers:dict):
     extension = filename.split(".")[-1]
-    if filename == extension: send_error(400)
-    if not (extension in accepted_extensions): send_error(400)
+    if filename == extension: send_error(400, "BAD REQUEST")
+    if not (extension in accepted_extensions): send_error(400, "BAD REQUEST")
     data = read_file(filename)
-    if not data: send_error(404)
-    Interface.send_to_http(headers, data)
+    if not data: send_error(404, "NOT FOUND")
+    Interface.send_to_http(200, "OK", headers, data)
 
 def send_avatar(username:str): #NOPROD
-    Interface.send_to_http({"Location":f"https://mc-heads.net/avatar/{username}"}, "")
+    Interface.send_to_http(200, "OK", {"Location":f"https://mc-heads.net/avatar/{username}"}, "")
     
 # -- #
     
@@ -35,7 +35,7 @@ for type in accepted_data_types:
         ressource_type = type
         break
 
-if not ressource_type: send_error(400)
+if not ressource_type: send_error(400, "BAD REQUEST")
     
 requested_file:str = query[ressource_type]
 match ressource_type:

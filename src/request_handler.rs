@@ -458,7 +458,7 @@ impl HTTPResponse {
                 _ => Err(String::from(format!("Error when loading text file {}", filename))),
             },
         };
-        let mut contents = match result {
+        let contents = match result {
             Ok(v) => v,
             Err(e) => {
                 error!("Error when accessing content:\n{}", e);
@@ -467,15 +467,22 @@ impl HTTPResponse {
         };
         match (&filename).split('.').last().unwrap_or("") {
             "py"|"js" => {
-                let (headers, body): (HashMap<String, String>, Vec<u8>) = match contents.split_once(&[13u8,10u8,13u8,10u8]) { //[13u8,10u8,13u8,10u8] <=> b"\r\n\r\n"
-                    Some((h,b)) => (parse_hashmap(std::str::from_utf8(&h).unwrap(), "\r\n", ":"), b),
-                    None => (HashMap::new(), contents),
+                let (code_and_message, headers_and_body): (String, Vec<u8>) = match contents.split_once(&[13u8,10u8]) { //[13u8,10u8] <=> b"\r\n"
+                    Some((cm, hb)) => (String::from_utf8_lossy(&cm).to_string(), hb.to_vec()),
+                    None => (String::from("200 OK"), contents),
                 };
+                let (code, message) = code_and_message.split_once(' ').unwrap_or(("200", "OK"));
+                let (headers, body): (HashMap<String, String>, Vec<u8>) = match headers_and_body.split_once(&[13u8,10u8,13u8,10u8]) { //[13u8,10u8,13u8,10u8] <=> b"\r\n\r\n"
+                    Some((h,b)) => (parse_hashmap(&String::from_utf8_lossy(&h), "\r\n", ":"), b),
+                    None => (HashMap::new(), headers_and_body),
+                };
+                self.response_code = code.parse::<u32>().unwrap_or(200u32);
+                self.response_message = String::from(message);
                 self.set_contents(body);
                 self.add_headers(headers);
-            } 
-            _ => {self.set_contents(contents);}
-        }
+            },
+            _ => self.set_contents(contents),
+        };
         ServerStatus::Ok(())
     }
 
@@ -547,21 +554,17 @@ mod tests {
 }
 
 trait SplitOnce {
-    fn split_once(&mut self, delimiter: &[u8]) -> Option<(Vec<u8>, Vec<u8>)>;
+    fn split_once(&self, delimiter: &[u8]) -> Option<(Vec<u8>, Vec<u8>)>;
 }
 
 impl SplitOnce for Vec<u8> {
-    fn split_once(&mut self, delimiter: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
+    fn split_once(&self, delimiter: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
         if let Some(index) = self.windows(delimiter.len()).position(|w| w == delimiter) {
-            let left = self.drain(..index).collect();
-            self.drain(..delimiter.len());
-            let right = self.drain(..).collect();
+            let left = self[..index].to_vec();
+            let right = self[index + delimiter.len()..].to_vec();
             Some((left, right))
         } else {
             None
         }
     }
 }
-
-
-

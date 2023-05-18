@@ -60,14 +60,14 @@ class Interface:
         except: return None
         else:  return requests
     
-    def export_to_http(headers:dict, body:bytes) -> bytes:
+    def export_to_http(status_code: int, message: str, headers:dict, body:bytes) -> bytes:
         output = ""
         for k,v in headers.items(): output += f"{k}:{v}\r\n"
-        return bytes(output, "utf-8") + b"\r\n" + body
+        return bytes(f"{status_code} {message}", "utf-8") + b"\r\n" + bytes(output, "utf-8") + b"\r\n" + body
 
-    def send_to_http(headers:dict, body):
+    def send_to_http(code:int, message:str, headers:dict, body):
         if type(body) != bytes: body = bytes(body, "utf-8")
-        data = Interface.export_to_http(headers, body)
+        data = Interface.export_to_http(code, message, headers, body)
         sys.stdout.buffer.write(data)
         sys.stdout.flush()
         sys.exit()
@@ -75,10 +75,14 @@ class Interface:
     def send_file(headers:dict, filename:str):
         with open(filename, "rb") as f: data=f.read()
         Interface.send_to_http(headers, data)
+        
+    def read_file(filename: str) -> str:
+        with open(filename, "r") as f: data=f.read()
+        return data
     
     def parse_body_query() -> dict:
         result = {}
-        body:str = Interface.parse_input()["body"]
+        body:str = Interface.parse_incoming_request()["body"]
         for s in body.split("&"):
             parts = s.split("=")
             result[parts[0]] = parts[1]

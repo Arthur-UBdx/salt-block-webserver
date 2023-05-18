@@ -1,0 +1,20 @@
+{
+    "status":"error",
+    "status_code":"400",
+    "message":"Bad request",
+    "result":["There was an error with the request you made, either arguments were needed or they were incorrect."],
+    "accpeted_arguments":{
+        "image":{
+            "accepted_extensions":["png", "jpg", "gif", "bmp"]
+        },
+        "file":{
+            "accepted_extensions":["zip", "jar"]
+        },
+        "css":{
+            "accepted_extensions":["css"]
+        },
+        "avatar":{
+            "accepted_extensions":[""]
+        }
+    }
+}
