@@ -18,9 +18,9 @@ use std::path::PathBuf;
 pub fn run_js(program_file: &str, args: &str) -> Result<Vec<u8>, String> {
     let path = PathBuf::from(program_file);
     let output = match Command::new("node")
-    .arg(path)
-    .arg(args)
-    .output()
+        .arg(path)
+        .arg(args)
+        .output()
     {
         Ok(v) => v,
         Err(e) => {
@@ -53,9 +53,9 @@ pub fn run_js(program_file: &str, args: &str) -> Result<Vec<u8>, String> {
 pub fn run_python(program_file: &str, args: &str) -> Result<Vec<u8>, String> {
     let path = PathBuf::from(program_file);
     let output = match Command::new("python3")
-    .arg(path)
-    .arg(args)
-    .output()
+        .arg(path)
+        .arg(args)
+        .output()
     {
         Ok(v) => v,
         Err(e) => {

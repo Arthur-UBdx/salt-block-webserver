@@ -91,7 +91,7 @@ pub fn handle_connection(mut stream: TcpStream, database_filepath: &str) {
         }
     };
     match std::str::from_utf8(&response) {
-        Ok(v) => debug!("{}", v),
+        Ok(v) => debug!("{:?}", v),
         Err(_) => debug!("{:?}", response),
     }
 
@@ -472,10 +472,11 @@ impl HTTPResponse {
                     None => (String::from("200 OK"), contents),
                 };
                 let (code, message) = code_and_message.split_once(' ').unwrap_or(("200", "OK"));
-                let (headers, body): (HashMap<String, String>, Vec<u8>) = match headers_and_body.split_once(&[13u8,10u8,13u8,10u8]) { //[13u8,10u8,13u8,10u8] <=> b"\r\n\r\n"
+                let (headers, mut body): (HashMap<String, String>, Vec<u8>) = match headers_and_body.split_once(&[13u8,10u8,13u8,10u8]) { //[13u8,10u8,13u8,10u8] <=> b"\r\n\r\n"
                     Some((h,b)) => (parse_hashmap(&String::from_utf8_lossy(&h), "\r\n", ":"), b),
                     None => (HashMap::new(), headers_and_body),
                 };
+                if !body.is_empty() && body[..2] == [13u8, 10u8] {body = body[2..].to_vec();}
                 self.response_code = code.parse::<u32>().unwrap_or(200u32);
                 self.response_message = String::from(message);
                 self.set_contents(body);
@@ -512,7 +513,6 @@ impl HTTPResponse {
 
     /// Converts the [HTTPResponse] back to bytes / [Vec]<u8>
     fn prepare_response(&mut self) -> Vec<u8> {
-        debug!("Headers {:#?}", self.headers);
         let mut headers_fmt = String::new();
         self.headers.iter().for_each(|(k,v)| {
             headers_fmt = format!("{}{}: {}\r\n", headers_fmt, k, v);
