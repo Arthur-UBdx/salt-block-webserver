@@ -513,9 +513,6 @@ impl HTTPResponse {
     /// Converts the [HTTPResponse] back to bytes / [Vec]<u8>
     fn prepare_response(&mut self) -> Vec<u8> {
         debug!("Headers {:#?}", self.headers);
-        if self.headers.contains_key("Location") {
-            (self.response_code, self.response_message) = (302u32, "FOUND".to_string());
-        }
         let mut headers_fmt = String::new();
         self.headers.iter().for_each(|(k,v)| {
             headers_fmt = format!("{}{}: {}\r\n", headers_fmt, k, v);
