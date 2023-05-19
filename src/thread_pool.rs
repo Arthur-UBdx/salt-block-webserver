@@ -24,7 +24,7 @@ impl ThreadPool {
             workers.push(Worker::new(id, Arc::clone(&receiver)));
         }
 
-        ThreadPool{workers: workers, sender: Some(sender)}
+        ThreadPool{workers, sender: Some(sender)}
     }
     /// Execute the given closure in a thread from the thread pool
     ///
@@ -72,7 +72,7 @@ impl Worker {
                 }
             }
         });
-        Worker {id: id, thread: Some(thread)}
+        Worker {id, thread: Some(thread)}
     }
 }
 

@@ -49,7 +49,7 @@ impl Database {
         for _ in 1..sql_values.len() {
             sql_request.push_str(", ?");
         }
-        sql_request.push_str(")");
+        sql_request.push(')');
 
         let mut statement = connection.prepare(&sql_request)?;
 

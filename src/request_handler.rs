@@ -78,7 +78,7 @@ pub fn handle_connection(mut stream: TcpStream, database_filepath: &str) {
     };
 
     let response = match http_code {
-        HTTPCode::Ok200(v) => {match HTTPResponse::from_matched_request(v, incoming_request) {
+        HTTPCode::Ok200(v) => {match HTTPResponse::from_matched_request(v, *incoming_request) {
             ServerStatus::Ok(mut v) => v.prepare_response(),
             _ => {send!(stream, ERR500.as_bytes());}
         }},
@@ -163,7 +163,7 @@ impl IncomingRequest {
         };
         let (path, query_map): (String, HashMap<String, String>) = match uri.split_once('?') {
             Some((path, query)) => {
-                (path.to_string(), parse_hashmap(&query, "&", "="))
+                (path.to_string(), parse_hashmap(query, "&", "="))
             }
             None => (uri.to_string(), HashMap::new()),
         };
@@ -171,11 +171,9 @@ impl IncomingRequest {
         loop {
             let mut line = String::new();
             buf_reader.read_line(&mut line).unwrap();
-            match line.as_str() {
-                "\r\n" => break,
-                _ => {}
-            }
-            let mut header_splitted = line.split(":");
+            if line.as_str() == "\r\n" {break}
+
+            let mut header_splitted = line.split(':');
             let key = String::from(header_splitted.next().unwrap().trim_end());
             let value = String::from(header_splitted.next().unwrap().trim_end());
             headers_map.insert(key.to_lowercase(), value);
@@ -201,14 +199,14 @@ impl IncomingRequest {
         };
         let incoming = IncomingRequest {
             method: method.to_string(), 
-            path: path,
+            path,
             query: query_map, 
             _version: version.trim().to_string(),
             headers: headers_map, 
             cookies: cookie_map, 
-            body: body};
+            body};
 
-        ParsedRequest::Ok(incoming)
+        ParsedRequest::Ok(Box::new(incoming))
     }
 
     /// Converts the incoming request to a json String in the following format:
@@ -235,17 +233,17 @@ impl IncomingRequest {
         }}", 
         self.method,
         self.path,
-        format!("{:?}", self.query).replace(" ", ""),
+        format!("{:?}", self.query).replace(' ', ""),
         self._version,
-        format!("{:?}", self.headers).replace(" ", ""),
-        format!("{:?}", self.cookies).replace(" ", ""),
+        format!("{:?}", self.headers).replace(' ', ""),
+        format!("{:?}", self.cookies).replace(' ', ""),
         self.body)
     }
 }
 
 /// An enum used by the [IncomingRequest::parse_request] method to handle empty and invalid requests
 pub enum ParsedRequest {
-    Ok (IncomingRequest),
+    Ok (Box<IncomingRequest>),
     Empty,
     BadRequest,
 }
@@ -304,7 +302,7 @@ impl Database {
         let parameters: Vec<String> = match request_result.get("params") {
             Some(v) => match v.as_str() {
                 "" => Vec::new(),
-                _ => v.split(";").map(|s| s.trim().to_string()).collect(),
+                _ => v.split(';').map(|s| s.trim().to_string()).collect(),
             },
             None => {return ServerStatus::InternalError;}
         };
@@ -329,7 +327,7 @@ impl Database {
                 return ServerStatus::Ok(HTTPCode::Err403);
             }
         }
-        ServerStatus::Ok(HTTPCode::Ok200(MatchedRequest {path: path, callback: callback, auth_level: auth_level, params: parameters}))
+        ServerStatus::Ok(HTTPCode::Ok200(MatchedRequest {path, callback, auth_level, params: parameters}))
     }
 
     /// This function will look in the database for a valid `sessionID` found in the [IncomingRequest]'s cookies field and will return the auth_level of this user.
@@ -419,8 +417,7 @@ pub struct HTTPResponse {
 impl HTTPResponse {
     ///Creates a new HTTPResponse object
     fn new(response_code: u32, response_message: String) -> HTTPResponse {
-        let http_response = HTTPResponse {response_code, response_message, headers: HashMap::new(), contents: Vec::new()};
-        http_response
+        HTTPResponse {response_code, response_message, headers: HashMap::new(), contents: Vec::new()}
     }
 
     ///Uses the [MatchedRequest] containing the file the user requested and other informations and returns a valid HTTPResponse object
@@ -450,12 +447,12 @@ impl HTTPResponse {
     /// println!("{}", response.contents);
     /// ```
     fn load_contents(&mut self, filename: String, script_args: &str) -> ServerStatus<()> {
-        let result = match (&filename).split('.').last().unwrap_or("") {
+        let result = match filename.split('.').last().unwrap_or("") {
             "py" => run_python(&filename, script_args),
             "js" => run_js(&filename, script_args),
             _ => match fs::read(&filename) {
                 Ok(v) => Ok(v),
-                _ => Err(String::from(format!("Error when loading text file {}", filename))),
+                _ => Err(format!("Error when loading text file {}", filename)),
             },
         };
         let contents = match result {
@@ -465,7 +462,7 @@ impl HTTPResponse {
                 return ServerStatus::InternalError;
             }
         };
-        match (&filename).split('.').last().unwrap_or("") {
+        match filename.split('.').last().unwrap_or("") {
             "py"|"js" => {
                 let (code_and_message, headers_and_body): (String, Vec<u8>) = match contents.split_once(&[13u8,10u8]) { //[13u8,10u8] <=> b"\r\n"
                     Some((cm, hb)) => (String::from_utf8_lossy(&cm).to_string(), hb.to_vec()),
@@ -530,10 +527,10 @@ pub fn parse_hashmap(target: &str, entries_separator: &str, key_value_separator:
     let mut result: HashMap<String, String> = HashMap::new();
     let entries = target.split(entries_separator);
     entries.for_each(|e| {
-        match e.split_once(key_value_separator) {
-            Some((k,v)) => {result.insert(k.trim().to_string(),v.trim().to_string()); ()},
-            None => ()
-        };
+        if let Some((k,v)) = e.split_once(key_value_separator) {
+            result.insert(  k.trim().to_string(),
+                            v.trim().to_string());
+        }
     });
     result
 }

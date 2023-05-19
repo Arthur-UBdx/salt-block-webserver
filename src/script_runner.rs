@@ -24,15 +24,15 @@ pub fn run_js(program_file: &str, args: &str) -> Result<Vec<u8>, String> {
     {
         Ok(v) => v,
         Err(e) => {
-            return Err(String::from(format!("Failed to run script \"{:?}\": {}", program_file, e)));
+            return Err(format!("Failed to run script \"{:?}\": {}", program_file, e));
         }
     };
 
     if output.status.success() {
-        return Ok(output.stdout);
+        Ok(output.stdout)
     } else {
         let result = String::from_utf8_lossy(&output.stderr);
-        return Err(result.to_string());
+        Err(result.to_string())
     }
 }
 
@@ -59,15 +59,15 @@ pub fn run_python(program_file: &str, args: &str) -> Result<Vec<u8>, String> {
     {
         Ok(v) => v,
         Err(e) => {
-            return Err(String::from(format!("Failed to run script \"{:?}\": {}", program_file, e)));
+            return Err(format!("Failed to run script \"{:?}\": {}", program_file, e));
         }
     };
 
     if output.status.success() {
-        return Ok(output.stdout);
+        Ok(output.stdout)
     } else {
         let result = String::from_utf8_lossy(&output.stderr);
-        return Err(result.to_string());
+        Err(result.to_string())
     }
 }
 

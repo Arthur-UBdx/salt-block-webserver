@@ -16,10 +16,10 @@ use crate::thread_pool::*;
 use crate::request_handler::*;
 
 fn main() {
-    let mut pythonpath = env::var_os("PYTHONPATH").unwrap_or(std::ffi::OsString::new()).into_string().unwrap_or(String::new());
+    let mut pythonpath = env::var_os("PYTHONPATH").unwrap_or_default().into_string().unwrap_or_default();
     let binding = env::current_dir().unwrap();
     let current_dir = binding.to_str().unwrap();
-    pythonpath.push_str(":");
+    pythonpath.push(':');
     pythonpath.push_str(current_dir);
     env::set_var("PYTHONPATH", &pythonpath);
 
@@ -31,10 +31,9 @@ fn main() {
             "data/config.json".to_string()},
     };
     let mut config_string = fs::read_to_string(server_config_file).unwrap();
-    config_string = config_string.replace("\"", "")
-        .replace("\n", "")
-        .strip_prefix("{").unwrap().to_string()
-        .strip_suffix("}").unwrap().to_string();
+    config_string = config_string.replace(['\"', '\n'], "")
+        .strip_prefix('{').unwrap().to_string()
+        .strip_suffix('}').unwrap().to_string();
 
     let config = parse_hashmap(config_string.trim(), ",", ":");
 
