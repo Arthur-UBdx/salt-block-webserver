@@ -48,14 +48,15 @@ fn main() {
         _ => LevelFilter::Warn,
     };
     println!("The logging level is currently set to : {:?}\nChange the value of the environnement variable 'LOG_LEVEL' to change it.", logging_level);
-
+    
     let logfile = File::create(config.get("log_file").unwrap()).unwrap();
     let tlogger = TermLogger::new(logging_level,Config::default(),TerminalMode::Stdout,ColorChoice::Auto);
     let wlogger = WriteLogger::new(logging_level,Config::default(),logfile);
     CombinedLogger::init(vec![tlogger, wlogger]).unwrap();
-
+    
     let listener = TcpListener::bind(config.get("ip").unwrap()).unwrap();
     let pool = ThreadPool::new(4);
+    println!("Starting server on {}", listener.local_addr().unwrap());
 
     let database = Arc::new(config.get("database").unwrap().to_string());
     for stream in listener.incoming() {
