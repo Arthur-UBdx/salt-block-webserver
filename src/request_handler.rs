@@ -36,8 +36,14 @@ static ERR500: &str = "HTTP/1.1 500 INTERNAL SERVER ERROR\r\nContent-Length: 188
 macro_rules! send {
     ($stream: expr, $msg:expr) => {
         {
-            $stream.write_all($msg).unwrap();
-            $stream.flush().unwrap();
+            match $stream.write_all($msg) {
+                Ok(_) => (),
+                Err(e) => {warn!("Error when writing data to stream: {}", e);},
+            }
+            match $stream.flush() {
+                Ok(_) => (),
+                Err(e) => {warn!("Error when flushing data to client: {}", e);},
+            };
             return;
         }
     };
