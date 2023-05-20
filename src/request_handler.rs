@@ -339,19 +339,19 @@ impl Database {
         let time_now = SystemTime::now().duration_since(UNIX_EPOCH).expect("ERROR: TIME WENT BACKWARDS").as_secs();
         let result = match self.request_row("users", "sessionID", session_id) {
             Ok(v) => v,
-            Err(_) => {return ServerStatus::InternalError}, 
+            Err(e) => {error!("{}", e); return ServerStatus::InternalError;}, 
         };
         let auth_level = match result.get("auth_level") {
             Some(v) => match v.parse::<u8>() {
                 Ok(v) => ServerStatus::Ok(UserAuth::Ok(v)),
-                Err(_) => ServerStatus::InternalError
+                Err(e) => {error!("{}", e); return ServerStatus::InternalError;}
             },
             None => ServerStatus::Ok(UserAuth::ErrAuth)
         };
         let expires = match result.get("sessionExpires") {
             Some(v) => match v.parse::<u64>() {
                 Ok(v) => v,
-                Err(_) => {return ServerStatus::InternalError;},
+                Err(e) => {error!("{}", e); return ServerStatus::InternalError;},
             },
             None => {return ServerStatus::Ok(UserAuth::ErrAuth);},
         };

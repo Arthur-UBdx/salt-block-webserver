@@ -25,7 +25,7 @@ impl Database {
         let column_count: usize = statement.column_count();
         for k in 0..column_count {
             let key = statement.column_name(k)?;
-            let value = statement.read::<String, _>(k)?;
+            let value = statement.read::<String, _>(k).unwrap_or_default();
             result_map.insert(key.to_string(), value.to_string());
         }
         Ok(result_map)
@@ -69,7 +69,8 @@ mod tests {
     #[test]
     fn test_request_row() {
         let database = Database::new("database.db");
-        database.request_row("users", "username", "admin");
+        let row = database.request_row("users", "username", "admin");
+        assert_eq!(HashMap::from([]), row)
     }
 
     #[test]
