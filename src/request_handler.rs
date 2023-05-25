@@ -159,10 +159,10 @@ impl IncomingRequest {
         let mut buf_reader = BufReader::new(&mut stream);
         let mut request_line = String::new();
         match buf_reader.read_line(&mut request_line) {
-            Ok() => (),
-            Err(e) => {
-                error!("Error when reading request line from ip {}:\n{}",
-                    stream.peer_addr().unwrap_or(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 80))
+            Ok(_) => (),
+            Err(_) => {
+                error!("Error when reading request line from ip {}:\n{:?}",
+                    stream.peer_addr().unwrap_or(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 80)),
                     stream);
                 return ParsedRequest::BadRequest;
             },
