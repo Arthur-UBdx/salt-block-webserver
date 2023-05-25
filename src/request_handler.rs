@@ -64,7 +64,7 @@ pub fn handle_connection(mut stream: TcpStream, database_filepath: &str) {
         ParsedRequest::Ok(v) => v,
         ParsedRequest::Empty => {return},
         ParsedRequest::BadRequest => {
-            warn!("An invalid request has been formulated by {}", stream.peer_addr().unwrap_or(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 7878)));
+            warn!("An invalid request has been formulated by {}", stream.peer_addr().unwrap_or(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 80)));
             let mut http_response = match database.get_error(HTTPCode::Err400, &IncomingRequest::new()) {
                 ServerStatus::Ok(Some(v)) => v,
                 _ => {send!(stream, ERR500.as_bytes());}
@@ -158,7 +158,15 @@ impl IncomingRequest {
     pub fn parse_request(mut stream: &TcpStream) -> ParsedRequest {
         let mut buf_reader = BufReader::new(&mut stream);
         let mut request_line = String::new();
-        buf_reader.read_line(&mut request_line).unwrap();
+        match buf_reader.read_line(&mut request_line) {
+            Ok() => (),
+            Err(e) => {
+                error!("Error when reading request line from ip {}:\n{}",
+                    stream.peer_addr().unwrap_or(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 80))
+                    stream);
+                return ParsedRequest::BadRequest;
+            },
+        };
 
         let (method, uri, version) = match request_line.split_once(' ') {
             Some((method, rest)) => {
