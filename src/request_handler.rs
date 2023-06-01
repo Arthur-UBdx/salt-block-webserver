@@ -170,7 +170,7 @@ impl IncomingRequest {
 
         let (method, uri, version) = match request_line.split_once(' ') {
             Some((method, rest)) => {
-                let (uri, version) = rest.split_once(' ').unwrap();
+                let (uri, version) = rest.split_once(' ').unwrap_or((rest, "HTTP/1.1"));
                 (method, uri, version)
             }
             None => return ParsedRequest::Empty,
