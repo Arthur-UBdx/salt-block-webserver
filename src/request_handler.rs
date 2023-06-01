@@ -188,8 +188,8 @@ impl IncomingRequest {
             if line.as_str() == "\r\n" {break}
 
             let mut header_splitted = line.split(':');
-            let key = String::from(header_splitted.next().unwrap().trim_end());
-            let value = String::from(header_splitted.next().unwrap().trim_end());
+            let key = String::from(header_splitted.next().unwrap_or("").trim_end());
+            let value = String::from(header_splitted.next().unwrap_or("").trim_end());
             headers_map.insert(key.to_lowercase(), value);
         }
         let cookie_map = match headers_map.get("cookie") {
