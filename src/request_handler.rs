@@ -38,11 +38,11 @@ macro_rules! send {
         {
             match $stream.write_all($msg) {
                 Ok(_) => (),
-                Err(e) => {warn!("Error when writing data to stream: {}", e);},
+                Err(e) => {info!("Error when writing data to stream: {}", e);},
             }
             match $stream.flush() {
                 Ok(_) => (),
-                Err(e) => {warn!("Error when flushing data to client: {}", e);},
+                Err(e) => {info!("Error when flushing data to client: {}", e);},
             };
             return;
         }
@@ -64,7 +64,7 @@ pub fn handle_connection(mut stream: TcpStream, database_filepath: &str) {
         ParsedRequest::Ok(v) => v,
         ParsedRequest::Empty => {return},
         ParsedRequest::BadRequest => {
-            warn!("An invalid request has been formulated by {}", stream.peer_addr().unwrap_or(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 80)));
+            info!("An invalid request has been formulated by {}", stream.peer_addr().unwrap_or(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0)));
             let mut http_response = match database.get_error(HTTPCode::Err400, &IncomingRequest::new()) {
                 ServerStatus::Ok(Some(v)) => v,
                 _ => {send!(stream, ERR500.as_bytes());}
