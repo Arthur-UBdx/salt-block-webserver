@@ -2,5 +2,6 @@
     "database":"data/database.db",
     "ip":"127.0.0.1:7878",
     "log_file":"log/server.log",
+    "log_level":"debug",
     "session_expiration_time":1800
 }

@@ -37,8 +37,8 @@ fn main() {
 
     let config = parse_hashmap(config_string.trim(), ",", ":");
 
-    let logging_level: LevelFilter = match env::var("LOG_LEVEL") {
-        Ok(v) => match v.trim() {
+    let logging_level: LevelFilter = match config.get("log_level") {
+        Some(v) => match v.trim() {
             "0" => LevelFilter::Error,
             "1" => LevelFilter::Warn,
             "2" => LevelFilter::Info,
@@ -47,7 +47,6 @@ fn main() {
         },
         _ => LevelFilter::Warn,
     };
-    println!("The logging level is currently set to : {:?}\nChange the value of the environnement variable 'LOG_LEVEL' to change it.", logging_level);
     
     let logfile = File::create(config.get("log_file").unwrap()).unwrap();
     let tlogger = TermLogger::new(logging_level,Config::default(),TerminalMode::Stdout,ColorChoice::Auto);
